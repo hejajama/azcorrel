@@ -10,11 +10,13 @@
 #include "config.hpp"
 #include "pdf.hpp"
 #include "amplitudelib/amplitudelib.hpp"
+#include "fragmentation/fragmentation.hpp"
 
 class CrossSection2
 {
     public:
-        CrossSection2(AmplitudeLib* N_, PDF* pdf_);
+        CrossSection2(AmplitudeLib* N_, PDF* pdf_, FragmentationFunction* frag);
+        REAL dSigma_lo(REAL pt1, REAL pt2, REAL y1, REAL y2, REAL theta, REAL sqrts);
         REAL dSigma(REAL pt1, REAL pt2, REAL y1, REAL y2, REAL theta, REAL sqrts);
         REAL Sigma(REAL pt1, REAL pt2, REAL y1, REAL y2, REAL sqrts);
 
@@ -23,11 +25,16 @@ class CrossSection2
         REAL xh(REAL pt1, REAL pt2, REAL y1, REAL y2, REAL sqrts);
         REAL Delta(REAL pt1, REAL pt2, REAL theta);
 
+        // \int dr S(r) J_1(k*r)
+        REAL G(REAL kt, REAL x); 
+
     private:
         AmplitudeLib* N;
         PDF* pdf;
-
-
+        FragmentationFunction* fragfun;
+        
+        REAL gcacheval, gcachek;
+        REAL fcacheval, fcachek;
         
 };
 

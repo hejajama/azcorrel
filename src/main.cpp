@@ -5,16 +5,13 @@
 #include "tools.hpp"
 #include "amplitudelib/amplitudelib.hpp"
 #include "xs.hpp"
+#include "fragmentation/kkp.hpp"
 #include <iostream>
 #include <cmath>
 #include <gsl/gsl_errno.h>
 
 
 using std::cout; using std::endl;
-
-
-
-AmplitudeLib amplitude("amplitude.dat");
 
 
 void PlotPdf(REAL Q);
@@ -30,13 +27,15 @@ int main(int argc, char* argv[])
         cout << "-sqrts sqrts: \\sqrts(s)" << endl;
         cout << "-pdfmode [MRST, CTEQ]: choose pdf" << endl;
         cout << "-pdf Q: plot PDF as a function of x" << endl;
+        cout << "-amplitude filename: where to load amplitude data" << endl;
         return 0;
     }
 
     gsl_set_error_handler(&ErrHandler);
+    std::string filename="amplitude.dat";
     
 
-    REAL y1=5; REAL y2=2; REAL pt1=4; REAL pt2=2; REAL sqrts=200;
+    REAL y1=3.5; REAL y2=2; REAL pt1=5; REAL pt2=3; REAL sqrts=200;
     REAL Q=-1;
     PDF *pdf=0;
     
@@ -52,6 +51,8 @@ int main(int argc, char* argv[])
             pt2 = StrToReal(argv[i+1]);
         else if (string(argv[i])=="-sqrts")
             sqrts = StrToReal(argv[i+1]);
+        else if (string(argv[i])=="-amplitude")
+            filename = argv[i+1];
         else if (string(argv[i])=="-pdf")
             Q=StrToReal(argv[i+1]);
         else if (string(argv[i])=="-pdfmode")
@@ -99,9 +100,19 @@ int main(int argc, char* argv[])
         delete pdf;
         return 0;
     }
-    CrossSection2 cross_section(&amplitude, pdf);
+    AmplitudeLib amplitude(filename);
+    KKP fragmentation;
+/*
+    for (REAL x=1e-4; x<1; x*=1.1)
+    {
+        cout << x << " " << fragmentation.Evaluate(G, H, x, 80.2) << endl;
+    }
+    delete pdf; return 0;
+  */  
+    CrossSection2 cross_section(&amplitude, pdf, &fragmentation);
 
-    cout << "# pt1=" << pt1 <<", pt2=" << pt2 <<", y1=" << y1 <<", y2=" << y2 << endl;
+    cout << "# pt1=" << pt1 <<", pt2=" << pt2 <<", y1=" << y1 <<", y2=" << y2 <<
+    " y_A=" << std::log(0.01 / cross_section.xa(pt1,pt2,y1,y2,sqrts)) << endl;
     cout << "# z=" << cross_section.z(pt1,pt2,y1,y2) <<", 1-z=" << cross_section.z(pt2,pt1,y2,y1)
     << " xa=" << cross_section.xa(pt1,pt2,y1,y2,sqrts)
     << " xh=" << cross_section.xh(pt1,pt2,y1,y2,sqrts) << endl;
@@ -110,10 +121,30 @@ int main(int argc, char* argv[])
 
     
 
+    ///DEBUG    
+    /*amplitude.InitializeInterpolation(y1);
+    
+    
+    #pragma omp parallel for
+    for (int kind=0; kind<80; kind++)
+    {
+        REAL k = 0.3*std::pow(1.1,kind);
+        REAL result = 1.0-k*cross_section.G(k, 0.01*std::exp(-y1));
+        //REAL result = SQR(k)*amplitude.S_k(k, y1);
+        //REAL result  =amplitude.N_k(k,y);
+        #pragma omp critical
+        cout << SQR(k) << " " << result << endl;
+
+    }
+    delete pdf; return 0;
+    */
+    
+    amplitude.InitializeInterpolation(
+        std::log(0.01 / cross_section.xa(pt1,pt2,y1,y2,sqrts)) );
     REAL normalization = cross_section.Sigma(pt1, pt2, y1, y2, sqrts);
     cout << "# Normalization totxs " << normalization << endl;
 
-    for (REAL theta=0; theta<2.0*M_PI; theta+=0.1)
+    for (REAL theta=0; theta<2.0*M_PI; theta+=0.15)
     {
         REAL result = cross_section.dSigma(pt1,pt2,y1,y2,theta,sqrts)
             + cross_section.dSigma(pt2,pt1,y2,y1,theta,sqrts);
@@ -122,6 +153,7 @@ int main(int argc, char* argv[])
 
 
     delete pdf;
+    
 
 
 

@@ -9,11 +9,6 @@
 #include "config.hpp"
 #include <string>
 
-enum Parton
-{
-    UVAL,DVAL,USEA,DSEA,U,D,S,C,B,G    // Valence quarks, sea quarks,all quarks, gluons
-};
-
 class PDF
 {
     public:
