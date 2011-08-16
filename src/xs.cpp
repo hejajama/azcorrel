@@ -6,6 +6,10 @@
 
 #include "xs.hpp"
 #include <gsl/gsl_integration.h>
+#include <gsl/gsl_monte_miser.h>
+#include <gsl/gsl_monte_plain.h>
+#include <gsl/gsl_monte.h>
+
 
 extern "C"
 {
@@ -14,8 +18,11 @@ extern "C"
 
 /*
  * Return d\sigma / (dpt1 dpt2 dy1 dy2 d\theta) lo approximation
+ *
+ * if multiply_pdf=true (default) then multiply by parton distribution function
  */
-REAL CrossSection2::dSigma_lo(REAL pt1, REAL pt2, REAL y1, REAL y2, REAL theta, REAL sqrts)
+REAL CrossSection2::dSigma_lo(REAL pt1, REAL pt2, REAL y1, REAL y2, REAL theta,
+    REAL sqrts, bool multiply_pdf)
 {
     REAL tmpz = z(pt1, pt2, y1, y2);
     REAL tmpxa = xa(pt1, pt2, y1, y2, sqrts);
@@ -31,7 +38,9 @@ REAL CrossSection2::dSigma_lo(REAL pt1, REAL pt2, REAL y1, REAL y2, REAL theta, 
         * ( SQR(1.0-tmpz)*SQR(pt1) + SQR(tmpz*pt2) - 2.0*(1.0-tmpz)*tmpz*pt1*pt2*std::cos(theta) );
 
     REAL tmpxh = xh(pt1, pt2, y1, y2, sqrts);
-    result *= 2.0*(pdf->xq(tmpxh, delta, UVAL) + pdf->xq(tmpxh, delta, DVAL));
+
+    if (multiply_pdf)
+        result *= 2.0*(pdf->xq(tmpxh, delta, UVAL) + pdf->xq(tmpxh, delta, DVAL));
         // factor 2 from isospin symmetry: xf_u,p = xf_d,n
 
     result *= pt1*pt2;
@@ -43,14 +52,18 @@ REAL CrossSection2::dSigma_lo(REAL pt1, REAL pt2, REAL y1, REAL y2, REAL theta, 
 
 /*
  * Ref. 0708.0231 eq (57)&(54), no k_t factorization/other approximations
+ *
+ * If pdf=true (default), then multiply by parton distribution function
  */
-REAL CrossSection2::dSigma(REAL pt1, REAL pt2, REAL y1, REAL y2, REAL phi, REAL sqrts)
+REAL CrossSection2::dSigma(REAL pt1, REAL pt2, REAL y1, REAL y2, REAL phi,
+    REAL sqrts, bool multiply_pdf)
 {
     //return dSigma_lo(pt1, pt2, y1,y2, phi, sqrts);
     REAL result=0;
     REAL tmpz = z(pt1, pt2, y1, y2);
     REAL tmpxa = xa(pt1, pt2, y1, y2, sqrts);
     REAL ya = std::log(0.01/tmpxa);
+    N->InitializeInterpolation(ya);
     REAL delta = Delta(pt1,pt2,phi);
     //cout << "# phi " << phi << " delta " << delta << endl;
     REAL g = G(pt2, tmpxa);
@@ -76,7 +89,9 @@ REAL CrossSection2::dSigma(REAL pt1, REAL pt2, REAL y1, REAL y2, REAL phi, REAL 
     result *= 2.0*(1.0+SQR(1.0-tmpz) );
     result *= (1.0-tmpz);
     REAL tmpxh = xh(pt1, pt2, y1, y2, sqrts);
-    result *= 2.0*(pdf->xq(tmpxh, delta, UVAL) + pdf->xq(tmpxh, delta, DVAL));
+
+    if (multiply_pdf)
+        result *= 2.0*(pdf->xq(tmpxh, delta, UVAL) + pdf->xq(tmpxh, delta, DVAL));
         // factor 2 from isospin symmetry: xf_u,p = xf_d,n
 
     result *= f;
@@ -108,7 +123,7 @@ REAL Inthelperf_sigma(REAL theta, void* p)
     {
         cerr << "nan/inf at theta=" << theta << endl;
     }
-    return res1+res2;
+    return (res1+res2);
 }
 
 REAL CrossSection2::Sigma(REAL pt1, REAL pt2, REAL y1, REAL y2, REAL sqrts)
@@ -139,6 +154,109 @@ REAL CrossSection2::Sigma(REAL pt1, REAL pt2, REAL y1, REAL y2, REAL sqrts)
     return result*2.0;  // *2.0 as we integrated over [0,pi], not [0,2pi]
 
 }
+
+
+
+/*
+ * Coinsidence probability
+ * Ref. 1005.4065, eq. (7)
+ * We integrate over a finite range of final state rapidities and transverse
+ * momenta. Also take into account fragmentation => integrate over z_i from x_1
+ * up to 1
+ */
+struct NPairHelper{
+    CrossSection2* xs;
+    AmplitudeLib* N;
+    REAL sqrts;
+    REAL phi;
+};
+
+REAL NPairHelperf(REAL* vec, size_t dim, void* p);
+
+REAL CrossSection2::NPair(REAL phi, REAL sqrts)
+{
+    REAL maxpt = 10;
+    REAL lower[7] = {2.4, 2.4, 0, 2, 1, 0, 0 };
+    REAL upper[7] = {4, 4, 1, maxpt, maxpt, 1, 1};
+
+    NPairHelper helper; helper.sqrts=sqrts; helper.phi=phi;
+    helper.xs=this; helper.N=N;
+
+    const gsl_rng_type *T;
+    gsl_rng *r;
+
+    gsl_rng_env_setup ();
+    gsl_monte_function montef = { &NPairHelperf, 7, &helper };   
+
+    size_t calls = 5000;
+    T = gsl_rng_default;
+    r = gsl_rng_alloc(T);
+
+    REAL result,abserr;
+    gsl_monte_miser_state *s = gsl_monte_miser_alloc (7);
+    gsl_monte_miser_integrate(&montef, lower, upper, 7, calls, r, s,
+        &result, &abserr);
+    gsl_monte_miser_free(s);
+    
+    gsl_rng_free(r);
+
+    cout << "# phi " << phi << " result " << result << " relerror "
+     << std::abs(abserr/result) << endl;
+
+    return result;
+}
+
+REAL NPairHelperf(REAL* vec, size_t dim, void* p)
+{
+    NPairHelper* par = (NPairHelper*)p;
+    // vec[0]=y1, vec[1]=y2, vec[2]=x, vec[3]=p_t1, vec[4]=p_t2, vec[5]=z1,
+    // vec[6]=z2
+
+
+    // z_1,z_2 integral
+    REAL minx1 = vec[3]/par->sqrts*std::exp(vec[0]);
+    REAL minx2 = vec[4]/par->sqrts*std::exp(vec[1]);
+    if (vec[5]<minx1) return 0;
+    if (vec[6]<minx2) return 0;
+
+    // x integral
+    if (vec[2] < minx1/vec[5]+minx2/vec[6]) return 0;
+    if (minx1/vec[5] + minx2/vec[6] >=1) return 0;
+
+    // p_2 integral
+    if (vec[4]>vec[3]) return 0;
+
+    // y1 and y2 for q->qg process
+    // p^+ = p_T e^y, approx. p_T constant during the fragmentation
+    // y_{i, q->qg} = ln[ p_i^+ / (z|p_i|) ]
+    // y_{i, q->qg} = y_i - ln 1/z_i
+    REAL y1 = vec[0] - std::log(1.0/vec[5]);
+    REAL y2 = vec[1] - std::log(1.0/vec[6]);
+
+    REAL result=0;
+
+    FragmentationFunction* fragfun = par->xs->FragFun();
+
+    // pdf and fragmentation scales are assumed to be p_t1 (leading hadron)
+    // fragmentation to neutral pions
+    result =
+        par->xs->dSigma(vec[3], vec[4], y1, y2, par->phi, par->sqrts, false)
+          * fragfun->Evaluate(G, PI0, vec[6], vec[3])*
+          ( fragfun->Evaluate(U, PI0, vec[5], vec[3])
+           +fragfun->Evaluate(D, PI0, vec[5], vec[3]) )
+        + par->xs->dSigma(vec[4], vec[3], y2, y1, par->phi, par->sqrts, false)
+          * fragfun->Evaluate(G, PI0, vec[5], vec[3])*
+          ( fragfun->Evaluate(U, PI0, vec[6], vec[3])
+           +fragfun->Evaluate(D, PI0, vec[6], vec[3]) );
+
+    // We can multiply the whole expression by this sum of PDF's as due to the
+    // isospin symmetry we have the same combination for both u and d quarks
+    result *= par->xs->Pdf()->xq(vec[2], vec[3], UVAL)
+        + par->xs->Pdf()->xq(vec[2], vec[3], DVAL);
+    
+    return result;
+}
+
 
 /*
  * Funktion G_{x_A} = \int dr (1-N(r)) J_1(k*r)
@@ -206,4 +324,14 @@ REAL CrossSection2::xh(REAL pt1, REAL pt2, REAL y1, REAL y2, REAL sqrts)
 {
     return ( std::abs(pt1)*std::exp(y1) + std::abs(pt2) * std::exp(y2) )
         / sqrts;
+}
+
+PDF* CrossSection2::Pdf()
+{
+    return pdf;
+}
+
+FragmentationFunction* CrossSection2::FragFun()
+{
+    return fragfun;
 }

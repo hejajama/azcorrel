@@ -16,9 +16,13 @@ class CrossSection2
 {
     public:
         CrossSection2(AmplitudeLib* N_, PDF* pdf_, FragmentationFunction* frag);
-        REAL dSigma_lo(REAL pt1, REAL pt2, REAL y1, REAL y2, REAL theta, REAL sqrts);
-        REAL dSigma(REAL pt1, REAL pt2, REAL y1, REAL y2, REAL theta, REAL sqrts);
+        REAL dSigma_lo(REAL pt1, REAL pt2, REAL y1, REAL y2, REAL theta, REAL sqrts
+            , bool multiply_pdf=true);
+        REAL dSigma(REAL pt1, REAL pt2, REAL y1, REAL y2, REAL theta, REAL sqrts,
+            bool pdf=true);
         REAL Sigma(REAL pt1, REAL pt2, REAL y1, REAL y2, REAL sqrts);
+
+        REAL NPair(REAL theta, REAL sqrts);
 
         REAL z(REAL pt1, REAL pt2, REAL y1, REAL y2);
         REAL xa(REAL pt1, REAL pt2, REAL y1, REAL y2, REAL sqrts);
@@ -26,7 +30,10 @@ class CrossSection2
         REAL Delta(REAL pt1, REAL pt2, REAL theta);
 
         // \int dr S(r) J_1(k*r)
-        REAL G(REAL kt, REAL x); 
+        REAL G(REAL kt, REAL x);
+
+        PDF* Pdf();
+        FragmentationFunction* FragFun(); 
 
     private:
         AmplitudeLib* N;

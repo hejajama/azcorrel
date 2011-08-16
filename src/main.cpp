@@ -138,7 +138,7 @@ int main(int argc, char* argv[])
     }
     delete pdf; return 0;
     */
-    
+
     amplitude.InitializeInterpolation(
         std::log(0.01 / cross_section.xa(pt1,pt2,y1,y2,sqrts)) );
     REAL normalization = cross_section.Sigma(pt1, pt2, y1, y2, sqrts);
@@ -146,8 +146,9 @@ int main(int argc, char* argv[])
 
     for (REAL theta=0; theta<2.0*M_PI; theta+=0.15)
     {
-        REAL result = cross_section.dSigma(pt1,pt2,y1,y2,theta,sqrts)
-            + cross_section.dSigma(pt2,pt1,y2,y1,theta,sqrts);
+        //REAL result = cross_section.dSigma(pt1,pt2,y1,y2,theta,sqrts)
+        //    + cross_section.dSigma(pt2,pt1,y2,y1,theta,sqrts);
+        REAL result = cross_section.NPair(theta, sqrts);
         cout << theta << " " << result/normalization << endl;
     }
 
