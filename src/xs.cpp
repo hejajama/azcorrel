@@ -8,6 +8,8 @@
 #include <gsl/gsl_integration.h>
 #include <gsl/gsl_monte_miser.h>
 #include <gsl/gsl_monte_plain.h>
+#include <gsl/gsl_monte_vegas.h>
+
 #include <gsl/gsl_monte.h>
 
 
@@ -66,17 +68,24 @@ REAL CrossSection2::dSigma(REAL pt1, REAL pt2, REAL y1, REAL y2, REAL phi,
     N->InitializeInterpolation(ya);
     REAL delta = Delta(pt1,pt2,phi);
     //cout << "# phi " << phi << " delta " << delta << endl;
-    REAL g = G(pt2, tmpxa);
-    //cout << "## g=" << g << endl;
-    // Quite uqly...
-    REAL f=0;
-    if (std::abs(delta - fcachek) < 0.01) f=fcacheval;
-    else
+    REAL g=0,f=0;
+    #pragma omp parallel sections
     {
-        f = N->S_k(delta, ya);
-        fcachek=delta; fcacheval=f;
+        #pragma omp section
+        {
+            g = G(pt2, tmpxa);
+        }
+        #pragma omp section
+        {
+            if (std::abs(delta - fcachek) < 0.01) f=fcacheval;
+            else
+            {
+                f = N->S_k(delta, ya);
+                fcachek=delta; fcacheval=f;
+            }
+        }
     }
-    //cout <<"## f=" << f << endl;
+
     
 
     // k - z\delta = (1-z)^2 pt1^2 + z^2 pt2^2 - 2*z*(1-z)*pt1*pt2*cos \phi
@@ -169,6 +178,7 @@ struct NPairHelper{
     AmplitudeLib* N;
     REAL sqrts;
     REAL phi;
+    REAL yh1,yh2;   // Rapidities of the hadrons
 };
 
 REAL NPairHelperf(REAL* vec, size_t dim, void* p);
@@ -176,28 +186,38 @@ REAL NPairHelperf(REAL* vec, size_t dim, void* p);
 REAL CrossSection2::NPair(REAL phi, REAL sqrts)
 {
     REAL maxpt = 10;
-    REAL lower[7] = {2.4, 2.4, 0, 2, 1, 0, 0 };
-    REAL upper[7] = {4, 4, 1, maxpt, maxpt, 1, 1};
+    const uint dim=7;
+    REAL lower[dim] = {0, 2,     1,     0, 0 ,2.4,2.4 };
+    REAL upper[dim] = {1, maxpt, maxpt, 1, 1 ,4,4 };
+
 
     NPairHelper helper; helper.sqrts=sqrts; helper.phi=phi;
     helper.xs=this; helper.N=N;
+    //helper.yh1=3.5; helper.yh2=2;
 
     const gsl_rng_type *T;
     gsl_rng *r;
 
     gsl_rng_env_setup ();
-    gsl_monte_function montef = { &NPairHelperf, 7, &helper };   
+    gsl_monte_function montef = { &NPairHelperf, dim, &helper };   
 
-    size_t calls = 5000;
+    size_t calls = 1000;
     T = gsl_rng_default;
     r = gsl_rng_alloc(T);
 
     REAL result,abserr;
-    gsl_monte_miser_state *s = gsl_monte_miser_alloc (7);
-    gsl_monte_miser_integrate(&montef, lower, upper, 7, calls, r, s,
-        &result, &abserr);
-    gsl_monte_miser_free(s);
     
+    /*gsl_monte_miser_state *s = gsl_monte_miser_alloc (dim);
+    gsl_monte_miser_integrate(&montef, lower, upper, dim, calls, r, s,
+        &result, &abserr);
+    gsl_monte_miser_free(s);*/
+    
+    gsl_monte_plain_state *s = gsl_monte_plain_alloc (dim);
+    gsl_monte_plain_integrate(&montef, lower, upper, dim, calls, r, s,
+        &result, &abserr);
+    gsl_monte_plain_free(s);
+    
+
     gsl_rng_free(r);
 
     cout << "# phi " << phi << " result " << result << " relerror "
@@ -209,29 +229,34 @@ REAL CrossSection2::NPair(REAL phi, REAL sqrts)
 REAL NPairHelperf(REAL* vec, size_t dim, void* p)
 {
     NPairHelper* par = (NPairHelper*)p;
-    // vec[0]=y1, vec[1]=y2, vec[2]=x, vec[3]=p_t1, vec[4]=p_t2, vec[5]=z1,
-    // vec[6]=z2
+    // vec[0]=x, vec[1]=p_t1, vec[2]=p_t2, vec[3]=z1,
+    // vec[4]=z2  vec[5]=y1  vec[6]=y2  (vec[5] and 6 may not be integrated over)
 
+    // If rapidity is integrated over
+    REAL yh1 = vec[5];
+    REAL yh2 = vec[6];
+    
+    //REAL yh1=par->yh1; REAL yh2=par->yh2;
 
     // z_1,z_2 integral
-    REAL minx1 = vec[3]/par->sqrts*std::exp(vec[0]);
-    REAL minx2 = vec[4]/par->sqrts*std::exp(vec[1]);
-    if (vec[5]<minx1) return 0;
-    if (vec[6]<minx2) return 0;
+    REAL minx1 = vec[3]/par->sqrts*std::exp(yh1);
+    REAL minx2 = vec[4]/par->sqrts*std::exp(yh2);
+    if (vec[3]<minx1) return 0;
+    if (vec[4]<minx2) return 0;
 
     // x integral
-    if (vec[2] < minx1/vec[5]+minx2/vec[6]) return 0;
-    if (minx1/vec[5] + minx2/vec[6] >=1) return 0;
+    if (vec[0] < minx1/vec[3]+minx2/vec[4]) return 0;
+    if (minx1/vec[3] + minx2/vec[4] >=1) return 0;
 
     // p_2 integral
-    if (vec[4]>vec[3]) return 0;
+    if (vec[2]>vec[1]) return 0;
 
     // y1 and y2 for q->qg process
     // p^+ = p_T e^y, approx. p_T constant during the fragmentation
     // y_{i, q->qg} = ln[ p_i^+ / (z|p_i|) ]
-    // y_{i, q->qg} = y_i - ln 1/z_i
-    REAL y1 = vec[0] - std::log(1.0/vec[5]);
-    REAL y2 = vec[1] - std::log(1.0/vec[6]);
+    // y_{i, q->qg} = y_i + ln 1/z_i
+    REAL y1 = yh1 + std::log(1.0/vec[3]);
+    REAL y2 = yh2 + std::log(1.0/vec[4]);
 
     REAL result=0;
 
@@ -240,19 +265,19 @@ REAL NPairHelperf(REAL* vec, size_t dim, void* p)
     // pdf and fragmentation scales are assumed to be p_t1 (leading hadron)
     // fragmentation to neutral pions
     result =
-        par->xs->dSigma(vec[3], vec[4], y1, y2, par->phi, par->sqrts, false)
-          * fragfun->Evaluate(G, PI0, vec[6], vec[3])*
-          ( fragfun->Evaluate(U, PI0, vec[5], vec[3])
-           +fragfun->Evaluate(D, PI0, vec[5], vec[3]) )
-        + par->xs->dSigma(vec[4], vec[3], y2, y1, par->phi, par->sqrts, false)
-          * fragfun->Evaluate(G, PI0, vec[5], vec[3])*
-          ( fragfun->Evaluate(U, PI0, vec[6], vec[3])
-           +fragfun->Evaluate(D, PI0, vec[6], vec[3]) );
+        par->xs->dSigma(vec[1], vec[2], y1, y2, par->phi, par->sqrts, false)
+          * fragfun->Evaluate(G, PI0, vec[4], vec[1])*
+          ( fragfun->Evaluate(U, PI0, vec[3], vec[1])
+           +fragfun->Evaluate(D, PI0, vec[3], vec[1]) )
+        + par->xs->dSigma(vec[2], vec[1], y2, y1, par->phi, par->sqrts, false)
+          * fragfun->Evaluate(G, PI0, vec[3], vec[1])*
+          ( fragfun->Evaluate(U, PI0, vec[4], vec[1])
+           +fragfun->Evaluate(D, PI0, vec[4], vec[1]) );
 
     // We can multiply the whole expression by this sum of PDF's as due to the
     // isospin symmetry we have the same combination for both u and d quarks
-    result *= par->xs->Pdf()->xq(vec[2], vec[3], UVAL)
-        + par->xs->Pdf()->xq(vec[2], vec[3], DVAL);
+    result *= par->xs->Pdf()->xq(vec[0], vec[1], UVAL)
+        + par->xs->Pdf()->xq(vec[0], vec[1], DVAL);
     
     return result;
 }
@@ -274,7 +299,7 @@ REAL CrossSection2::G(REAL kt, REAL x)
     helper.N=N; helper.kt=kt;
 
     set_fpu_state();
-    init_workspace_fourier(500);   // number of bessel zeroes, max 2000
+    init_workspace_fourier(700);   // number of bessel zeroes, max 2000
 
     REAL result = fourier_j1(kt, G_helperf, &helper);
     gcachek=kt; gcacheval=result;

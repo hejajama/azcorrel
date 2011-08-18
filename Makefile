@@ -1,4 +1,4 @@
-CXXFLAGS = `gsl-config --cflags` -O3 -Wall -pedantic #-fopenmp# -I ./libbci-1.1.0/ 
+CXXFLAGS = `gsl-config --cflags` -O3 -Wall -pedantic -fopenmp# -I ./libbci-1.1.0/ 
 LDFLAGS = `gsl-config --libs` -lm  
 
 include filelist.m
