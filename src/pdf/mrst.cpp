@@ -22,7 +22,7 @@ MRST::~MRST()
     delete mrst;
 }
 
-REAL MRST::xq(REAL x, REAL q, Parton p)
+double MRST::xq(double x, double q, Parton p)
 {
     mrst->mrst99(x, q, set);
     switch(p)

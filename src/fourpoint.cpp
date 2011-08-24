@@ -16,17 +16,17 @@ using std::sin;
 
 struct Inthelper_correction
 {
-    REAL pt1,pt2,ya;
-    REAL phi;
+    double pt1,pt2,ya;
+    double phi;
     AmplitudeLib* N;
 };
 
-REAL Inthelperf_correction(REAL* vec, size_t dim, void* p);
-REAL NormalizeAngle(REAL phi);
+double Inthelperf_correction(double* vec, size_t dim, void* p);
+double NormalizeAngle(double phi);
 
-REAL Lx(REAL x);
+double Lx(double x);
 
-REAL CrossSection2::CorrectionTerm(REAL pt1, REAL pt2, REAL ya, REAL phi)
+double CrossSection2::CorrectionTerm(double pt1, double pt2, double ya, double phi)
 
 {
 
@@ -37,9 +37,9 @@ REAL CrossSection2::CorrectionTerm(REAL pt1, REAL pt2, REAL ya, REAL phi)
     // vec[5]=theta_r
     // pt1=k, pt2=q
     
-    REAL result,abserr;
-    REAL lower[6] = {N->MinR(), N->MinR(), N->MinR(), 0, 0, 0};
-    REAL upper[6] = {N->MaxR(), N->MaxR(), N->MaxR(), 2.0*M_PI, 2.0*M_PI, 2.0*M_PI};
+    double result,abserr;
+    double lower[6] = {N->MinR(), N->MinR(), N->MinR(), 0, 0, 0};
+    double upper[6] = {N->MaxR(), N->MaxR(), N->MaxR(), 2.0*M_PI, 2.0*M_PI, 2.0*M_PI};
 
     N->SetOutOfRangeErrors(false);
     
@@ -81,52 +81,52 @@ REAL CrossSection2::CorrectionTerm(REAL pt1, REAL pt2, REAL ya, REAL phi)
 }
 
 
-REAL Inthelperf_correction(REAL* vec, size_t dim, void* p)
+double Inthelperf_correction(double* vec, size_t dim, void* p)
 {
     Inthelper_correction* par = (Inthelper_correction*)p;
 
     // vec[0]=u1, vec[1]=u2, vec[2]=r, vec[3]=theta_u1, vec[4]=theta_u2
     // vec[5]=theta_r
     // angles are within range [0, 2\pi]
-    REAL u1 = vec[0]; REAL u2=vec[1]; REAL r=vec[2]; REAL theta1=vec[4];
-    REAL theta2=vec[5]; REAL thetar = vec[5];
+    double u1 = vec[0]; double u2=vec[1]; double r=vec[2]; double theta1=vec[4];
+    double theta2=vec[5]; double thetar = vec[5];
 
     AmplitudeLib* N = par->N;
 
-    REAL pt1 = par->pt1;
-    REAL pt2 = par->pt2;
-    REAL phi = par->phi;
-    REAL y = par->ya;
+    double pt1 = par->pt1;
+    double pt2 = par->pt2;
+    double phi = par->phi;
+    double y = par->ya;
 
     // Dot products
     // pt1=k, pt2=q
 
-    REAL pt1_dot_u1 = pt1*u1*cos(theta1);
-    REAL pt1_dot_u2 = pt1*u2*cos(theta2);
-    REAL pt1_dot_r  = pt1*r*cos(thetar);
-    //REAL pt2_dot_u1 = pt2*u1*cos(NormalizeAngle(theta1 - phi));
-    //REAL pt2_dot_u2 = pt2*u2*cos(NormalizeAngle(theta2 - phi));
-    REAL pt2_dot_r  = pt2*r*cos(NormalizeAngle(thetar - phi));
-    REAL u1_dot_r   = u1*r*cos(NormalizeAngle(theta1-thetar));
-    REAL u2_dot_r   = u2*r*cos(NormalizeAngle(theta2-thetar));
-    REAL u1_dot_u2  = u1*u2*cos(NormalizeAngle(theta2-theta1));
+    double pt1_dot_u1 = pt1*u1*cos(theta1);
+    double pt1_dot_u2 = pt1*u2*cos(theta2);
+    double pt1_dot_r  = pt1*r*cos(thetar);
+    //double pt2_dot_u1 = pt2*u1*cos(NormalizeAngle(theta1 - phi));
+    //double pt2_dot_u2 = pt2*u2*cos(NormalizeAngle(theta2 - phi));
+    double pt2_dot_r  = pt2*r*cos(NormalizeAngle(thetar - phi));
+    double u1_dot_r   = u1*r*cos(NormalizeAngle(theta1-thetar));
+    double u2_dot_r   = u2*r*cos(NormalizeAngle(theta2-thetar));
+    double u1_dot_u2  = u1*u2*cos(NormalizeAngle(theta2-theta1));
 
     // Norms
     // (u1-u2+r)^2
-    REAL u1u2r_sqr = SQR(u1)+SQR(u2)+SQR(r) + 2.0*u1_dot_r - 2.0*u2_dot_r
+    double u1u2r_sqr = SQR(u1)+SQR(u2)+SQR(r) + 2.0*u1_dot_r - 2.0*u2_dot_r
         - 2.0*u1_dot_u2;
-    REAL u1u2r = std::sqrt(u1u2r_sqr);
+    double u1u2r = std::sqrt(u1u2r_sqr);
     // (u1+r)^2
-    REAL u1r_sqr = SQR(u1)+SQR(r) + 2.0*u1_dot_r;
-    REAL u1r = std::sqrt(u1r_sqr);
+    double u1r_sqr = SQR(u1)+SQR(r) + 2.0*u1_dot_r;
+    double u1r = std::sqrt(u1r_sqr);
     // (u2-r)^2
-    REAL u2r_sqr = SQR(u2)+SQR(r) - 2.0*u2_dot_r;
-    REAL u2r = std::sqrt(u2r_sqr);
+    double u2r_sqr = SQR(u2)+SQR(r) - 2.0*u2_dot_r;
+    double u2r = std::sqrt(u2r_sqr);
 
     // Contribution from e^(ik(u'-u)) e^(-i \Delta r),
     // k = pt1, \delta = pt1+pt2
     // Take only real part
-    REAL result = cos(pt1_dot_u2 - pt1_dot_u1)*cos(pt1_dot_r + pt2_dot_r)
+    double result = cos(pt1_dot_u2 - pt1_dot_u1)*cos(pt1_dot_r + pt2_dot_r)
         + sin(pt1_dot_u2 - pt1_dot_u1)*sin(pt1_dot_r + pt2_dot_r);
 
     result *= N->S(u1u2r, y) *
@@ -146,7 +146,7 @@ REAL Inthelperf_correction(REAL* vec, size_t dim, void* p)
 
 }
 
-REAL NormalizeAngle(REAL phi)
+double NormalizeAngle(double phi)
 {
     /*
      * An angle between two vectors is allways between [0,pi]
@@ -168,7 +168,7 @@ REAL NormalizeAngle(REAL phi)
 
 }
 
-REAL Lx(REAL x)
+double Lx(double x)
 {
     return -SQR(x) * std::log( M_E + 1.0/(LAMBDAQCD2*SQR(x)) );
 }

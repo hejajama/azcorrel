@@ -14,7 +14,7 @@
 using std::cout; using std::endl;
 
 
-void PlotPdf(REAL Q);
+void PlotPdf(double Q);
 
 int main(int argc, char* argv[])
 {
@@ -35,8 +35,8 @@ int main(int argc, char* argv[])
     std::string filename="amplitude.dat";
     
 
-    REAL y1=3.5; REAL y2=2; REAL pt1=5; REAL pt2=3; REAL sqrts=200;
-    REAL Q=-1;
+    double y1=3.5; double y2=2; double pt1=5; double pt2=3; double sqrts=200;
+    double Q=-1;
     PDF *pdf=0;
     
     for (int i=1; i<argc; i++)
@@ -103,7 +103,7 @@ int main(int argc, char* argv[])
     AmplitudeLib amplitude(filename);
     KKP fragmentation;
 /*
-    for (REAL x=1e-4; x<1; x*=1.1)
+    for (double x=1e-4; x<1; x*=1.1)
     {
         cout << x << " " << fragmentation.Evaluate(G, H, x, 80.2) << endl;
     }
@@ -127,10 +127,10 @@ int main(int argc, char* argv[])
     
     for (int kind=0; kind<80; kind++)
     {
-        REAL k = 0.3*std::pow(1.1,kind);
-        REAL result = 1.0-k*cross_section.G(k, 0.01*std::exp(-y1));
-        //REAL result = SQR(k)*amplitude.S_k(k, y1);
-        //REAL result  =amplitude.N_k(k,y);
+        double k = 0.3*std::pow(1.1,kind);
+        double result = 1.0-k*cross_section.G(k, 0.01*std::exp(-y1));
+        //double result = SQR(k)*amplitude.S_k(k, y1);
+        //double result  =amplitude.N_k(k,y);
         cout << SQR(k) << " " << result << endl;
 
     }
@@ -139,14 +139,14 @@ int main(int argc, char* argv[])
 
     amplitude.InitializeInterpolation(
         std::log(0.01 / cross_section.xa(pt1,pt2,y1,y2,sqrts)) );
-    REAL normalization =1;// cross_section.Sigma(pt1, pt2, y1, y2, sqrts);
+    double normalization =1;// cross_section.Sigma(pt1, pt2, y1, y2, sqrts);
     cout << "# Normalization totxs " << normalization << endl;
 
-    for (REAL theta=1; theta<2.0*M_PI-1; theta+=0.075)
+    for (double theta=1; theta<2.0*M_PI-1; theta+=0.075)
     {
-        REAL result = cross_section.dSigma(pt1,pt2,y1,y2,theta,sqrts);
+        double result = cross_section.dSigma(pt1,pt2,y1,y2,theta,sqrts);
             //+ cross_section.dSigma(pt2,pt1,y2,y1,theta,sqrts);
-        //REAL result = cross_section.NPair(theta, sqrts);
+        //double result = cross_section.NPair(theta, sqrts);
         cout << theta << " " << result/normalization << endl;
     }
 

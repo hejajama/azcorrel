@@ -9,12 +9,12 @@
 #include "cteq.hpp"
 #include <string>
 
-REAL CTEQ::xq(REAL x, REAL q, Parton p)
+double CTEQ::xq(double x, double q, Parton p)
 {
     // Codes
     int u=1; int d=2; int s=3; int c=4; int b=5; int g=0;
     int ubar=-1; int dbar=-2; 
-    REAL result=0;
+    double result=0;
     // Antiquarks with minus sign 
     switch(p)
     {

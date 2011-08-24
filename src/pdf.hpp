@@ -13,11 +13,11 @@ class PDF
 {
     public:
         ~PDF();
-        virtual REAL xq(REAL x, REAL q, Parton p)=0;    // return x*q(x,q)
+        virtual double xq(double x, double q, Parton p)=0;    // return x*q(x,q)
         virtual void Initialize(int param=-1);
         virtual std::string GetString();
 
-        void PlotPdf(REAL Q);
+        void PlotPdf(double Q);
 };
 
 #endif

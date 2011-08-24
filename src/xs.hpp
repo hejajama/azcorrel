@@ -16,22 +16,22 @@ class CrossSection2
 {
     public:
         CrossSection2(AmplitudeLib* N_, PDF* pdf_, FragmentationFunction* frag);
-        REAL dSigma_lo(REAL pt1, REAL pt2, REAL y1, REAL y2, REAL theta, REAL sqrts
+        double dSigma_lo(double pt1, double pt2, double y1, double y2, double theta, double sqrts
             , bool multiply_pdf=true);
-        REAL dSigma(REAL pt1, REAL pt2, REAL y1, REAL y2, REAL theta, REAL sqrts,
+        double dSigma(double pt1, double pt2, double y1, double y2, double theta, double sqrts,
             bool pdf=true);
-        REAL CorrectionTerm(REAL pt1, REAL pt2, REAL ya, REAL phi);
-        REAL Sigma(REAL pt1, REAL pt2, REAL y1, REAL y2, REAL sqrts);
+        double CorrectionTerm(double pt1, double pt2, double ya, double phi);
+        double Sigma(double pt1, double pt2, double y1, double y2, double sqrts);
 
-        REAL NPair(REAL theta, REAL sqrts);
+        double NPair(double theta, double sqrts);
 
-        REAL z(REAL pt1, REAL pt2, REAL y1, REAL y2);
-        REAL xa(REAL pt1, REAL pt2, REAL y1, REAL y2, REAL sqrts);
-        REAL xh(REAL pt1, REAL pt2, REAL y1, REAL y2, REAL sqrts);
-        REAL Delta(REAL pt1, REAL pt2, REAL theta);
+        double z(double pt1, double pt2, double y1, double y2);
+        double xa(double pt1, double pt2, double y1, double y2, double sqrts);
+        double xh(double pt1, double pt2, double y1, double y2, double sqrts);
+        double Delta(double pt1, double pt2, double theta);
 
         // \int dr S(r) J_1(k*r)
-        REAL G(REAL kt, REAL x);
+        double G(double kt, double x);
 
         PDF* Pdf();
         FragmentationFunction* FragFun(); 
@@ -41,8 +41,8 @@ class CrossSection2
         PDF* pdf;
         FragmentationFunction* fragfun;
         
-        REAL gcacheval, gcachek;
-        REAL fcacheval, fcachek;
+        double gcacheval, gcachek;
+        double fcacheval, fcachek;
         
 };
 

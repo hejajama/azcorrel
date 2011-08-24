@@ -23,23 +23,23 @@ extern "C"
  *
  * if multiply_pdf=true (default) then multiply by parton distribution function
  */
-REAL CrossSection2::dSigma_lo(REAL pt1, REAL pt2, REAL y1, REAL y2, REAL theta,
-    REAL sqrts, bool multiply_pdf)
+double CrossSection2::dSigma_lo(double pt1, double pt2, double y1, double y2, double theta,
+    double sqrts, bool multiply_pdf)
 {
-    REAL tmpz = z(pt1, pt2, y1, y2);
-    REAL tmpxa = xa(pt1, pt2, y1, y2, sqrts);
+    double tmpz = z(pt1, pt2, y1, y2);
+    double tmpxa = xa(pt1, pt2, y1, y2, sqrts);
 
-    REAL result = std::pow(1.0-tmpz, 3.0)*(1.0+SQR(1.0-tmpz));
-    REAL qs = 1.0/N->SaturationScale(std::log(0.01/tmpxa), 0.5);
+    double result = std::pow(1.0-tmpz, 3.0)*(1.0+SQR(1.0-tmpz));
+    double qs = 1.0/N->SaturationScale(std::log(0.01/tmpxa), 0.5);
     result *= SQR(qs);
 
-    REAL delta = Delta(pt1, pt2, theta);
+    double delta = Delta(pt1, pt2, theta);
     //result /= SQR(pt2) * SQR(delta)
     //    * ((1.0-2.0*tmpz)*SQR(pt1)+SQR(tmpz)*SQR(delta) - 2.0*tmpz*pt1*pt2*std::cos(theta));
     result /= SQR(pt2) * SQR(delta)
         * ( SQR(1.0-tmpz)*SQR(pt1) + SQR(tmpz*pt2) - 2.0*(1.0-tmpz)*tmpz*pt1*pt2*std::cos(theta) );
 
-    REAL tmpxh = xh(pt1, pt2, y1, y2, sqrts);
+    double tmpxh = xh(pt1, pt2, y1, y2, sqrts);
 
     if (multiply_pdf)
         result *= 2.0*(pdf->xq(tmpxh, delta, UVAL) + pdf->xq(tmpxh, delta, DVAL));
@@ -57,18 +57,18 @@ REAL CrossSection2::dSigma_lo(REAL pt1, REAL pt2, REAL y1, REAL y2, REAL theta,
  *
  * If pdf=true (default), then multiply by parton distribution function
  */
-REAL CrossSection2::dSigma(REAL pt1, REAL pt2, REAL y1, REAL y2, REAL phi,
-    REAL sqrts, bool multiply_pdf)
+double CrossSection2::dSigma(double pt1, double pt2, double y1, double y2, double phi,
+    double sqrts, bool multiply_pdf)
 {
     //return dSigma_lo(pt1, pt2, y1,y2, phi, sqrts);
-    REAL result=0;
-    REAL tmpz = z(pt1, pt2, y1, y2);
-    REAL tmpxa = xa(pt1, pt2, y1, y2, sqrts);
-    REAL ya = std::log(0.01/tmpxa);
+    double result=0;
+    double tmpz = z(pt1, pt2, y1, y2);
+    double tmpxa = xa(pt1, pt2, y1, y2, sqrts);
+    double ya = std::log(0.01/tmpxa);
     //N->InitializeInterpolation(ya);
-    REAL delta = Delta(pt1,pt2,phi);
+    double delta = Delta(pt1,pt2,phi);
     //cout << "# phi " << phi << " delta " << delta << endl;
-    REAL g=0,f=0;
+    double g=0,f=0;
     #pragma omp parallel sections
     {
         #pragma omp section
@@ -89,7 +89,7 @@ REAL CrossSection2::dSigma(REAL pt1, REAL pt2, REAL y1, REAL y2, REAL phi,
     
 
     // (k - z\delta)^2 = (1-z)^2 pt1^2 + z^2 pt2^2 - 2*z*(1-z)*pt1*pt2*cos \phi
-    REAL kzdeltasqr = SQR(1.0-tmpz)*SQR(pt1) + SQR(tmpz*pt2) - 2.0*tmpz*(1.0-tmpz)
+    double kzdeltasqr = SQR(1.0-tmpz)*SQR(pt1) + SQR(tmpz*pt2) - 2.0*tmpz*(1.0-tmpz)
                                 * pt1*pt2*std::cos(phi);
     
     result = SQR(g) + 1.0/kzdeltasqr
@@ -102,11 +102,11 @@ REAL CrossSection2::dSigma(REAL pt1, REAL pt2, REAL y1, REAL y2, REAL phi,
     
     // Add correction term following from more exact calculationg of the
     // 4-point function
-    REAL correction = CorrectionTerm(pt1,pt2, ya, phi);
+    double correction = CorrectionTerm(pt1,pt2, ya, phi);
     cout << "# relcorrection at pt2=" << pt2 << " = " << std::abs(correction/result) << endl;
     result+=correction;
 
-    REAL tmpxh = xh(pt1, pt2, y1, y2, sqrts);
+    double tmpxh = xh(pt1, pt2, y1, y2, sqrts);
 
     if (multiply_pdf)
         result *= 2.0*(pdf->xq(tmpxh, delta, UVAL) + pdf->xq(tmpxh, delta, DVAL));
@@ -135,13 +135,13 @@ REAL CrossSection2::dSigma(REAL pt1, REAL pt2, REAL y1, REAL y2, REAL phi,
 struct Inthelper_sigma
 {
     CrossSection2 *xs;
-    REAL pt1,pt2,y1,y2,sqrts;
+    double pt1,pt2,y1,y2,sqrts;
 };
-REAL Inthelperf_sigma(REAL theta, void* p)
+double Inthelperf_sigma(double theta, void* p)
 {
     Inthelper_sigma *par = (Inthelper_sigma*) p;
-    REAL res1 = par->xs->dSigma(par->pt1, par->pt2, par->y1, par->y2, theta, par->sqrts);
-    REAL res2 = par->xs->dSigma(par->pt2, par->pt1, par->y2, par->y1, theta, par->sqrts);
+    double res1 = par->xs->dSigma(par->pt1, par->pt2, par->y1, par->y2, theta, par->sqrts);
+    double res2 = par->xs->dSigma(par->pt2, par->pt1, par->y2, par->y1, theta, par->sqrts);
 
     if (isnan(res1) or isnan(res2) or isinf(res1) or isinf(res2))
     {
@@ -150,9 +150,9 @@ REAL Inthelperf_sigma(REAL theta, void* p)
     return (res1+res2);
 }
 
-REAL CrossSection2::Sigma(REAL pt1, REAL pt2, REAL y1, REAL y2, REAL sqrts)
+double CrossSection2::Sigma(double pt1, double pt2, double y1, double y2, double sqrts)
 {
-    const REAL THETAINTPOINTS = 20;
+    const double THETAINTPOINTS = 20;
     gsl_integration_workspace *workspace 
      = gsl_integration_workspace_alloc(THETAINTPOINTS);
     Inthelper_sigma par;
@@ -162,10 +162,10 @@ REAL CrossSection2::Sigma(REAL pt1, REAL pt2, REAL y1, REAL y2, REAL sqrts)
     fun.params = &par;
     fun.function = Inthelperf_sigma;
 
-    REAL mintheta = 0.0;
-    REAL maxtheta = M_PI;
+    double mintheta = 0.0;
+    double maxtheta = M_PI;
 
-    int status; REAL result, abserr;
+    int status; double result, abserr;
     status = gsl_integration_qag(&fun, mintheta,
             maxtheta, 0, 0.01, THETAINTPOINTS,
             GSL_INTEG_GAUSS51, workspace, &result, &abserr);
@@ -191,19 +191,19 @@ REAL CrossSection2::Sigma(REAL pt1, REAL pt2, REAL y1, REAL y2, REAL sqrts)
 struct NPairHelper{
     CrossSection2* xs;
     AmplitudeLib* N;
-    REAL sqrts;
-    REAL phi;
-    REAL yh1,yh2;   // Rapidities of the hadrons
+    double sqrts;
+    double phi;
+    double yh1,yh2;   // Rapidities of the hadrons
 };
 
-REAL NPairHelperf(REAL* vec, size_t dim, void* p);
+double NPairHelperf(double* vec, size_t dim, void* p);
 
-REAL CrossSection2::NPair(REAL phi, REAL sqrts)
+double CrossSection2::NPair(double phi, double sqrts)
 {
-    REAL maxpt = 10;
+    double maxpt = 10;
     const uint dim=7;
-    REAL lower[dim] = {0, 2,     1,     0, 0 ,2.4,2.4 };
-    REAL upper[dim] = {1, maxpt, maxpt, 1, 1 ,4,4 };
+    double lower[dim] = {0, 2,     1,     0, 0 ,2.4,2.4 };
+    double upper[dim] = {1, maxpt, maxpt, 1, 1 ,4,4 };
 
 
     NPairHelper helper; helper.sqrts=sqrts; helper.phi=phi;
@@ -220,7 +220,7 @@ REAL CrossSection2::NPair(REAL phi, REAL sqrts)
     T = gsl_rng_default;
     r = gsl_rng_alloc(T);
 
-    REAL result,abserr;
+    double result,abserr;
     
     /*gsl_monte_miser_state *s = gsl_monte_miser_alloc (dim);
     gsl_monte_miser_integrate(&montef, lower, upper, dim, calls, r, s,
@@ -241,21 +241,21 @@ REAL CrossSection2::NPair(REAL phi, REAL sqrts)
     return result;
 }
 
-REAL NPairHelperf(REAL* vec, size_t dim, void* p)
+double NPairHelperf(double* vec, size_t dim, void* p)
 {
     NPairHelper* par = (NPairHelper*)p;
     // vec[0]=x, vec[1]=p_t1, vec[2]=p_t2, vec[3]=z1,
     // vec[4]=z2  vec[5]=y1  vec[6]=y2  (vec[5] and 6 may not be integrated over)
 
     // If rapidity is integrated over
-    REAL yh1 = vec[5];
-    REAL yh2 = vec[6];
+    double yh1 = vec[5];
+    double yh2 = vec[6];
     
-    //REAL yh1=par->yh1; REAL yh2=par->yh2;
+    //double yh1=par->yh1; double yh2=par->yh2;
 
     // z_1,z_2 integral
-    REAL minx1 = vec[3]/par->sqrts*std::exp(yh1);
-    REAL minx2 = vec[4]/par->sqrts*std::exp(yh2);
+    double minx1 = vec[3]/par->sqrts*std::exp(yh1);
+    double minx2 = vec[4]/par->sqrts*std::exp(yh2);
     if (vec[3]<minx1) return 0;
     if (vec[4]<minx2) return 0;
 
@@ -270,10 +270,10 @@ REAL NPairHelperf(REAL* vec, size_t dim, void* p)
     // p^+ = p_T e^y, approx. p_T constant during the fragmentation
     // y_{i, q->qg} = ln[ p_i^+ / (z|p_i|) ]
     // y_{i, q->qg} = y_i + ln 1/z_i
-    REAL y1 = yh1 + std::log(1.0/vec[3]);
-    REAL y2 = yh2 + std::log(1.0/vec[4]);
+    double y1 = yh1 + std::log(1.0/vec[3]);
+    double y2 = yh2 + std::log(1.0/vec[4]);
 
-    REAL result=0;
+    double result=0;
 
     FragmentationFunction* fragfun = par->xs->FragFun();
 
@@ -302,9 +302,9 @@ REAL NPairHelperf(REAL* vec, size_t dim, void* p)
  * Funktion G_{x_A} = \int dr (1-N(r)) J_1(k*r)
  * as in ref. 0708.0231 but w.o. vector k/|k|
  */
-struct G_helper { REAL y; AmplitudeLib* N; REAL kt; };
-REAL G_helperf(REAL r, void* p);
-REAL CrossSection2::G(REAL kt, REAL x)
+struct G_helper { double y; AmplitudeLib* N; double kt; };
+double G_helperf(double r, void* p);
+double CrossSection2::G(double kt, double x)
 {
     if (std::abs(kt - gcachek) < 0.01)
         return gcacheval;
@@ -316,16 +316,16 @@ REAL CrossSection2::G(REAL kt, REAL x)
     set_fpu_state();
     init_workspace_fourier(700);   // number of bessel zeroes, max 2000
 
-    REAL result = fourier_j1(kt, G_helperf, &helper);
+    double result = fourier_j1(kt, G_helperf, &helper);
     gcachek=kt; gcacheval=result;
     return result;
 
 }
 
-REAL G_helperf(REAL r, void *p)
+double G_helperf(double r, void *p)
 {
     G_helper* par = (G_helper*) p;
-    REAL result=0;
+    double result=0;
     if (r< par->N->MinR()) result = 1.0;
     else if (r > par->N->MaxR()) result=0;
     else result = 1.0 - par->N->N(r, par->y);
@@ -343,24 +343,24 @@ CrossSection2::CrossSection2(AmplitudeLib* N_, PDF* pdf_,FragmentationFunction* 
 }
 
 
-REAL CrossSection2::Delta(REAL pt1, REAL pt2, REAL theta)
+double CrossSection2::Delta(double pt1, double pt2, double theta)
 {
     return std::sqrt( SQR(pt1) + SQR(pt2) + 2.0*pt1*pt2*std::cos(theta) );
 }
 
-REAL CrossSection2::z(REAL pt1, REAL pt2, REAL y1, REAL y2)
+double CrossSection2::z(double pt1, double pt2, double y1, double y2)
 {
     return std::abs(pt1)*std::exp(y1)
         / (std::abs(pt1)*std::exp(y1) + std::abs(pt2)*std::exp(y2) );
 }
 
-REAL CrossSection2::xa(REAL pt1, REAL pt2, REAL y1, REAL y2, REAL sqrts)
+double CrossSection2::xa(double pt1, double pt2, double y1, double y2, double sqrts)
 {
     return ( std::abs(pt1)*std::exp(-y1) + std::abs(pt2) * std::exp(-y2) )
         / sqrts;
 }
 
-REAL CrossSection2::xh(REAL pt1, REAL pt2, REAL y1, REAL y2, REAL sqrts)
+double CrossSection2::xh(double pt1, double pt2, double y1, double y2, double sqrts)
 {
     return ( std::abs(pt1)*std::exp(y1) + std::abs(pt2) * std::exp(y2) )
         / sqrts;

@@ -18,11 +18,11 @@ PDF::~PDF()
 {
 }
 
-void PDF::PlotPdf(REAL Q)
+void PDF::PlotPdf(double Q)
 {
     cout << "# PDF at Q=" << Q << "GeV" << endl;
     cout <<"# x     up    down " << endl;
-    for (REAL x=1e-4; x<1; x*=1.1)
+    for (double x=1e-4; x<1; x*=1.1)
     {
         cout << x << " " << xq(x,Q,U) << " " <<  xq(x,Q,D) << endl;
     }

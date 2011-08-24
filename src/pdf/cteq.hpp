@@ -15,7 +15,7 @@
 
 class CTEQ : public PDF
 {
-        REAL xq(REAL x, REAL q, Parton p);    // return x*q(x,q)
+        double xq(double x, double q, Parton p);    // return x*q(x,q)
         void Initialize(int param=-1);
         std::string GetString();
 
@@ -25,7 +25,7 @@ class CTEQ : public PDF
 extern "C"
 {
     void setct10_(int& iset_);
-    REAL ct10pdf_(int& iparton, REAL& x, REAL& q);
+    double ct10pdf_(int& iparton, double& x, double& q);
 }
 
 #endif

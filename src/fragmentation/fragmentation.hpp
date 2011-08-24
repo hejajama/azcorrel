@@ -24,7 +24,7 @@ class FragmentationFunction
 {
     public:
         // D_{p->h}, x: long. mom. fraction, qs: scale (GeV)
-        virtual REAL Evaluate(Parton p, Hadron h, REAL x, REAL qs)=0;
+        virtual double Evaluate(Parton p, Hadron h, double x, double qs)=0;
         FragmentationFunction();
         virtual std::string GetString();
     private:
