@@ -6,7 +6,7 @@
  * Heikki Mäntysaari <heikki.mantysaari@jyu.fi>
  */
 
-#include "config.hpp"
+#include <tools/config.hpp>
 #include <string>
 
 class PDF

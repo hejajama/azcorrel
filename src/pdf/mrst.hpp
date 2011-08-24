@@ -9,7 +9,7 @@
  */
 
 #include "../pdf.hpp"
-#include "../config.hpp"
+#include <tools/config.hpp>
 #include "mrst99.h"
 #include <string>
 
@@ -17,7 +17,7 @@ class MRST : public PDF
 {
     public:
         ~MRST();
-        double xq(double x, double q, Parton p);    // return x*q(x,q)
+        REAL xq(REAL x, REAL q, Parton p);    // return x*q(x,q)
         void Initialize(int param=-1);
         std::string GetString();
     private:

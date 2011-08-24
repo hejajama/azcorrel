@@ -15,7 +15,7 @@
 
 extern "C"
 {
-    #include "amplitudelib/fourier/fourier.h"
+    #include <fourier/fourier.h>
 }
 
 /*

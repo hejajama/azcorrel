@@ -9,13 +9,13 @@
  * Heikki Mäntysaari <heikki.mantysaari@jyu.fi>, 2011
  */
 
-#include "../config.hpp"
+#include <tools/config.hpp>
 #include "../pdf.hpp"
 #include <string>
 
 class CTEQ : public PDF
 {
-        double xq(double x, double q, Parton p);    // return x*q(x,q)
+        REAL xq(REAL x, REAL q, Parton p);    // return x*q(x,q)
         void Initialize(int param=-1);
         std::string GetString();
 
@@ -25,7 +25,7 @@ class CTEQ : public PDF
 extern "C"
 {
     void setct10_(int& iset_);
-    double ct10pdf_(int& iparton, double& x, double& q);
+    REAL ct10pdf_(int& iparton, REAL& x, REAL& q);
 }
 
 #endif

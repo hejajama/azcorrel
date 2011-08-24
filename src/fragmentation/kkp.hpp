@@ -9,13 +9,13 @@
  */
 
 #include <string>
-#include "../config.hpp"
+#include <tools/config.hpp>
 #include "fragmentation.hpp"
 
 class KKP : public FragmentationFunction
 {
     public:
-        double Evaluate(Parton p, Hadron h, double x, double qs);
+        REAL Evaluate(Parton p, Hadron h, REAL x, REAL qs);
         KKP();
         std::string GetString();
     private:

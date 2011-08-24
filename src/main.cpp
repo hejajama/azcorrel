@@ -1,9 +1,9 @@
 #include "pdf.hpp"
 #include "pdf/mrst.hpp"
 #include "pdf/cteq.hpp"
-#include "config.hpp"
-#include "tools.hpp"
-#include "amplitudelib/amplitudelib.hpp"
+#include <tools/config.hpp>
+#include <tools/tools.hpp>
+#include <amplitudelib/amplitudelib.hpp>
 #include "xs.hpp"
 #include "fragmentation/kkp.hpp"
 #include <iostream>

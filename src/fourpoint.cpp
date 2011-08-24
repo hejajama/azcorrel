@@ -33,13 +33,16 @@ double CrossSection2::CorrectionTerm(double pt1, double pt2, double ya, double p
     /*
      * We need to integrate over u,u',r and their corresponding angles
      */
-    // vec[0]=u1, vec[1]=u2, vec[2]=r, vec[3]=theta_u1, vec[4]=theta_u2
+    // vec[0]= ln u1, vec[1]=ln u2, vec[2]= ln
+    // vec[3]=theta_u1, vec[4]=theta_u2
     // vec[5]=theta_r
     // pt1=k, pt2=q
     
     double result,abserr;
-    double lower[6] = {N->MinR(), N->MinR(), N->MinR(), 0, 0, 0};
-    double upper[6] = {N->MaxR(), N->MaxR(), N->MaxR(), 2.0*M_PI, 2.0*M_PI, 2.0*M_PI};
+    double lower[6] = {std::log(N->MinR()), std::log(N->MinR()),
+        std::log(N->MinR()), 0, 0, 0};
+    double upper[6] = {std::log(N->MaxR()), std::log(N->MaxR()),
+        std::log(N->MaxR()), 2.0*M_PI, 2.0*M_PI, 2.0*M_PI};
 
     N->SetOutOfRangeErrors(false);
     
@@ -51,23 +54,23 @@ double CrossSection2::CorrectionTerm(double pt1, double pt2, double ya, double p
     helper.pt1=pt1; helper.pt2=pt2; helper.phi=phi; helper.ya=ya;
     helper.N=N;
 
-    size_t calls = 3000005;
+    size_t calls = 1000000000;
 
     gsl_monte_function G = {&Inthelperf_correction, 6, &helper};
 
-    
+  /*  
         gsl_monte_plain_state *s = gsl_monte_plain_alloc (6);
         gsl_monte_plain_integrate (&G, lower, upper, 6, calls, r, s, 
                                     &result, &abserr);
         gsl_monte_plain_free (s);
     
-
-    /*
+*/
+    
          gsl_monte_miser_state *s = gsl_monte_miser_alloc (6);
          gsl_monte_miser_integrate (&G, lower, upper, 6, calls, r, s, 
                                     &result, &abserr);
          gsl_monte_miser_free (s);
-    */
+    
 
 
     cout << "# result " << result << " relerror " << std::abs(abserr/result) << endl;    
@@ -85,10 +88,12 @@ double Inthelperf_correction(double* vec, size_t dim, void* p)
 {
     Inthelper_correction* par = (Inthelper_correction*)p;
 
-    // vec[0]=u1, vec[1]=u2, vec[2]=r, vec[3]=theta_u1, vec[4]=theta_u2
+    // vec[0]= ln u1, vec[1]=ln u2, vec[2]= ln
+    // vec[3]=theta_u1, vec[4]=theta_u2
     // vec[5]=theta_r
     // angles are within range [0, 2\pi]
-    double u1 = vec[0]; double u2=vec[1]; double r=vec[2]; double theta1=vec[4];
+    double u1 = std::exp(vec[0]); double u2=std::exp(vec[1]);
+    double r=std::exp(vec[2]); double theta1=vec[4];
     double theta2=vec[5]; double thetar = vec[5];
 
     AmplitudeLib* N = par->N;
@@ -140,6 +145,13 @@ double Inthelperf_correction(double* vec, size_t dim, void* p)
     // \phi^*(u2) \phi(u) summed over spins and polarization
     // simple resul in massless z=0 case
     result *= -16.0*SQR(M_PI) * u1_dot_u2 / ( SQR(u1)*SQR(u2) );
+
+    result *= u1*u2*r;   // d^2 u_1 d^2 u2 d^3 r = du_1 du_2 dr u_1 u_2 u_3 d\theta_i
+
+    result *= u1*u2*r;  // multiply by e^(ln u1) e^(ln u2) e^(ln r) due to the
+                        // change of variables (Jacobian)
+
+    //cout << "u1 " << u1 << " u2 " << u2 << " r " << r << " result " << result << endl;
 
     return result;
 

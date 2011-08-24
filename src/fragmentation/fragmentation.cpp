@@ -4,7 +4,6 @@
  */
 
 #include <string>
-#include "../config.hpp"
 #include "fragmentation.hpp"
 
 FragmentationFunction::FragmentationFunction()

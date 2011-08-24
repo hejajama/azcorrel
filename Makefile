@@ -1,11 +1,11 @@
-CXXFLAGS = `gsl-config --cflags` -O3 -Wall -pedantic -fopenmp# -I ./libbci-1.1.0/ 
+CXXFLAGS = `gsl-config --cflags` -O3 -Wall -pedantic -fopenmp -I ../amplitudelib# -I ./libbci-1.1.0/ 
 LDFLAGS = `gsl-config --libs` -lm  
 
 include filelist.m
 
-all: rbk
+all: azcorrel 
 
-rbk: $(OBJECTS) $(COBJECTS) $(FOBJECTS) 
+azcorrel: $(OBJECTS) $(COBJECTS) $(FOBJECTS) 
 	g++ $(CXXFLAGS) $(LDFLAGS) $(OBJECTS) $(COBJECTS) $(FOBJECTS) -lgfortran -o azcorrel
 .cpp.o:
 	 g++ $(CXXFLAGS) $< -c -o $@

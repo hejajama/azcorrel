@@ -4,7 +4,7 @@
  */
 
 #include "kkp.hpp"
-#include "../config.hpp"
+#include <tools/config.hpp>
 #include "fragmentation.hpp"
 
 extern "C"
@@ -13,14 +13,14 @@ extern "C"
     //  0    1    2    3    4    5    6    7    8     9    10
     //  g    u   ubar  d   dbar  s   sbar  c   cbar   b   bbar
     
-    void kkp_(int& h, int& set, double& x, double &qs, double output[]);
+    void kkp_(int& h, int& set, REAL& x, REAL &qs, REAL output[]);
 }
 
 // D_{p->h}, x: long. mom. fraction, qs: scale (GeV)
-double KKP::Evaluate(Parton p, Hadron h, double x, double qs)
+REAL KKP::Evaluate(Parton p, Hadron h, REAL x, REAL qs)
 {
     int hadron=0; 
-    double partons[11];
+    REAL partons[11];
     partons[0]=0; partons[1]=1; partons[2]=2; partons[3]=3; partons[10]=10;
     if (h==PI) hadron=1;
     else if (h==K) hadron=2;
@@ -32,7 +32,7 @@ double KKP::Evaluate(Parton p, Hadron h, double x, double qs)
 
     int set=1;  // NLO
     kkp_(hadron, set, x, qs, partons);
-    double result=0;
+    REAL result=0;
     if (p==G) result = partons[0];
     else if (p==U) result = partons[1];
     else if (p==D) result = partons[3];

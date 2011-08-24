@@ -7,9 +7,9 @@
  * Heikki Mäntysaari <heikki.mantysaari@jyu.fi>, 2011
  */
 
-#include "config.hpp"
+#include <tools/config.hpp>
 #include "pdf.hpp"
-#include "amplitudelib/amplitudelib.hpp"
+#include <amplitudelib/amplitudelib.hpp>
 #include "fragmentation/fragmentation.hpp"
 
 class CrossSection2
