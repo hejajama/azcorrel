@@ -65,7 +65,7 @@ REAL CrossSection2::dSigma(REAL pt1, REAL pt2, REAL y1, REAL y2, REAL phi,
     REAL tmpz = z(pt1, pt2, y1, y2);
     REAL tmpxa = xa(pt1, pt2, y1, y2, sqrts);
     REAL ya = std::log(0.01/tmpxa);
-    N->InitializeInterpolation(ya);
+    //N->InitializeInterpolation(ya);
     REAL delta = Delta(pt1,pt2,phi);
     //cout << "# phi " << phi << " delta " << delta << endl;
     REAL g=0,f=0;
@@ -88,7 +88,7 @@ REAL CrossSection2::dSigma(REAL pt1, REAL pt2, REAL y1, REAL y2, REAL phi,
 
     
 
-    // k - z\delta = (1-z)^2 pt1^2 + z^2 pt2^2 - 2*z*(1-z)*pt1*pt2*cos \phi
+    // (k - z\delta)^2 = (1-z)^2 pt1^2 + z^2 pt2^2 - 2*z*(1-z)*pt1*pt2*cos \phi
     REAL kzdeltasqr = SQR(1.0-tmpz)*SQR(pt1) + SQR(tmpz*pt2) - 2.0*tmpz*(1.0-tmpz)
                                 * pt1*pt2*std::cos(phi);
     
@@ -96,19 +96,34 @@ REAL CrossSection2::dSigma(REAL pt1, REAL pt2, REAL y1, REAL y2, REAL phi,
         - 2.0*g*( (1.0-tmpz)*SQR(pt1) - tmpz*pt1*pt2*std::cos(phi) ) / ( pt1*kzdeltasqr );
 
     result *= 2.0*(1.0+SQR(1.0-tmpz) );
-    result *= (1.0-tmpz);
+    
+
+    result *= f;
+    
+    // Add correction term following from more exact calculationg of the
+    // 4-point function
+    REAL correction = CorrectionTerm(pt1,pt2, ya, phi);
+    cout << "# relcorrection at pt2=" << pt2 << " = " << std::abs(correction/result) << endl;
+    result+=correction;
+
     REAL tmpxh = xh(pt1, pt2, y1, y2, sqrts);
 
     if (multiply_pdf)
         result *= 2.0*(pdf->xq(tmpxh, delta, UVAL) + pdf->xq(tmpxh, delta, DVAL));
         // factor 2 from isospin symmetry: xf_u,p = xf_d,n
 
-    result *= f;
-    result *= pt1*pt2;
+    // Multiply terms which follow from change of variable d\sigma/d^3kd^q
+    // => d\simga / d^2kd^2 q dy_1 dy_2
+    // and integration over x (takes away the delta function)
+    // meaning (1-z)*k^+
+    // However k^+ has already cancelled out and is also cancelled out in
+    // CorrectionTerm()
+    result *= (1.0-tmpz);
 
+    result *= pt1*pt2;  // d^2 pt_1 d^2 pt2 => dpt_1 dpt_2
+
+    // Overall constants
     result *= ALPHAS*Cf/(4.0*SQR(M_PI));
-    //cout <<"## result " << result << endl;
-
     return result;
 }
 

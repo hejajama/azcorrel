@@ -85,11 +85,11 @@ int main(int argc, char* argv[])
         pdf->Initialize();
     }
    
-    if (pt1*std::exp(y1) < pt2*std::exp(y2))
+    /*if (pt1*std::exp(y1) < pt2*std::exp(y2))
     {
         cerr <<"pt1*exp(y1) < pt2*exp(y2) " << endl;
         return 0;
-    }
+    }*/
     
     cout <<"# Parton distribution function used: " << pdf->GetString() << endl;
 
@@ -139,14 +139,14 @@ int main(int argc, char* argv[])
 
     amplitude.InitializeInterpolation(
         std::log(0.01 / cross_section.xa(pt1,pt2,y1,y2,sqrts)) );
-    REAL normalization =1.0;//= cross_section.Sigma(pt1, pt2, y1, y2, sqrts);
+    REAL normalization =1;// cross_section.Sigma(pt1, pt2, y1, y2, sqrts);
     cout << "# Normalization totxs " << normalization << endl;
 
-    for (REAL theta=0.15; theta<2.0*M_PI-0.15; theta+=0.15)
+    for (REAL theta=1; theta<2.0*M_PI-1; theta+=0.075)
     {
-        //REAL result = cross_section.dSigma(pt1,pt2,y1,y2,theta,sqrts)
-        //    + cross_section.dSigma(pt2,pt1,y2,y1,theta,sqrts);
-        REAL result = cross_section.NPair(theta, sqrts);
+        REAL result = cross_section.dSigma(pt1,pt2,y1,y2,theta,sqrts);
+            //+ cross_section.dSigma(pt2,pt1,y2,y1,theta,sqrts);
+        //REAL result = cross_section.NPair(theta, sqrts);
         cout << theta << " " << result/normalization << endl;
     }
 

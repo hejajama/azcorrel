@@ -20,6 +20,7 @@ class CrossSection2
             , bool multiply_pdf=true);
         REAL dSigma(REAL pt1, REAL pt2, REAL y1, REAL y2, REAL theta, REAL sqrts,
             bool pdf=true);
+        REAL CorrectionTerm(REAL pt1, REAL pt2, REAL ya, REAL phi);
         REAL Sigma(REAL pt1, REAL pt2, REAL y1, REAL y2, REAL sqrts);
 
         REAL NPair(REAL theta, REAL sqrts);
