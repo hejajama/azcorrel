@@ -21,6 +21,8 @@ class CrossSection2
         double dSigma(double pt1, double pt2, double y1, double y2, double theta, double sqrts,
             bool pdf=true);
         double CorrectionTerm(double pt1, double pt2, double ya, double phi);
+        double CorrectionTerm_nomc(double pt1, double pt2, double ya, double phi);
+        double CorrectionTerm_fft(double pt1, double pt2, double ya, double phi);
         double Sigma(double pt1, double pt2, double y1, double y2, double sqrts);
 
         double NPair(double theta, double sqrts);
@@ -43,6 +45,9 @@ class CrossSection2
         
         double gcacheval, gcachek;
         double fcacheval, fcachek;
+
+
+        double V2int(double rx, double ry, double v1x, double v1y, double y);
         
 };
 

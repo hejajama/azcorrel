@@ -16,7 +16,7 @@ enum Hadron
     K0,      // K^0, \bar K^0
     P,      // P, \bar P
     PI0,    // \pi^0
-    N,      // N, \bar N
+    NE,      // N, \bar N
     H       // sum of pions, kaons and protons
 };
 

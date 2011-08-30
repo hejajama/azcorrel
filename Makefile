@@ -1,5 +1,5 @@
 CXXFLAGS = `gsl-config --cflags` -O3 -Wall -pedantic -fopenmp -I ../amplitudelib# -I ./libbci-1.1.0/ 
-LDFLAGS = `gsl-config --libs` -lm  
+LDFLAGS = `gsl-config --libs` -lm -lfftw3 
 
 include filelist.m
 

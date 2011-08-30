@@ -27,7 +27,7 @@ REAL KKP::Evaluate(Parton p, Hadron h, REAL x, REAL qs)
     else if (h==K0) hadron=3;
     else if (h==P) hadron=4;
     else if (h==PI0) hadron=5;
-    else if (h==N) hadron=6;
+    else if (h==NE) hadron=6;
     else if (h==H) hadron=7;
 
     int set=1;  // NLO

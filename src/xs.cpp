@@ -102,8 +102,9 @@ double CrossSection2::dSigma(double pt1, double pt2, double y1, double y2, doubl
     
     // Add correction term following from more exact calculationg of the
     // 4-point function
-    double correction = CorrectionTerm(pt1,pt2, ya, phi);
-    cout << "# relcorrection at pt2=" << pt2 << " = " << std::abs(correction/result) << endl;
+    cout << "# Result w.o. corrections = " << result << endl;
+    double correction = CorrectionTerm_fft(pt1,pt2, ya, phi);
+    cout << "# relcorrection = " << std::abs(correction/result) << endl;
     result+=correction;
 
     double tmpxh = xh(pt1, pt2, y1, y2, sqrts);

@@ -1,6 +1,6 @@
 SOURCES = src/main.cpp src/pdf/mrst99.cpp ../amplitudelib/tools/tools.cpp ../amplitudelib/amplitudelib/amplitudelib.cpp \
 		../amplitudelib/amplitudelib/datafile.cpp ../amplitudelib/tools/interpolation.cpp \
-		 src/pdf.cpp \
+		src/fourpoint_fft.cpp src/pdf.cpp \
 		src/pdf/mrst.cpp src/pdf/cteq.cpp src/xs.cpp \
 		src/fragmentation/fragmentation.cpp src/fragmentation/kkp.cpp \
 		src/fourpoint.cpp
