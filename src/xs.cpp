@@ -63,6 +63,7 @@ double CrossSection2::dSigma(double pt1, double pt2, double y1, double y2, doubl
     //return dSigma_lo(pt1, pt2, y1,y2, phi, sqrts);
     double result=0;
     double tmpz = z(pt1, pt2, y1, y2);
+    tmpz=0;
     double tmpxa = xa(pt1, pt2, y1, y2, sqrts);
     double ya = std::log(0.01/tmpxa);
     //N->InitializeInterpolation(ya);
@@ -102,14 +103,16 @@ double CrossSection2::dSigma(double pt1, double pt2, double y1, double y2, doubl
     
     // Add correction term following from more exact calculationg of the
     // 4-point function
-    cout << "# Result w.o. corrections = " << result << endl;
+    /*cout << "# Result w.o. corrections = " << result << endl;
     double correction = CorrectionTerm_fft(pt1,pt2, ya, phi);
     cout << "# relcorrection = " << std::abs(correction/result) << endl;
+    cout << "# Exiting at " << LINEINFO << endl;
+    exit(1);
     result+=correction;
-
+    */
     double tmpxh = xh(pt1, pt2, y1, y2, sqrts);
 
-    if (multiply_pdf)
+    /*if (multiply_pdf)
         result *= 2.0*(pdf->xq(tmpxh, delta, UVAL) + pdf->xq(tmpxh, delta, DVAL));
         // factor 2 from isospin symmetry: xf_u,p = xf_d,n
 
@@ -125,6 +128,7 @@ double CrossSection2::dSigma(double pt1, double pt2, double y1, double y2, doubl
 
     // Overall constants
     result *= ALPHAS*Cf/(4.0*SQR(M_PI));
+    */
     return result;
 }
 
@@ -307,7 +311,7 @@ struct G_helper { double y; AmplitudeLib* N; double kt; };
 double G_helperf(double r, void* p);
 double CrossSection2::G(double kt, double x)
 {
-    if (std::abs(kt - gcachek) < 0.01)
+    if (std::abs(kt - gcachek) < 0.001)
         return gcacheval;
     
     G_helper helper;
