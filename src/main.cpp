@@ -110,16 +110,15 @@ int main(int argc, char* argv[])
     delete pdf; return 0;
   */  
     CrossSection2 cross_section(&amplitude, pdf, &fragmentation);
-
+    double ya=std::log(0.01 / cross_section.xa(pt1,pt2,y1,y2,sqrts));
     cout << "# pt1=" << pt1 <<", pt2=" << pt2 <<", y1=" << y1 <<", y2=" << y2 <<
-    " y_A=" << std::log(0.01 / cross_section.xa(pt1,pt2,y1,y2,sqrts)) << endl;
+    " y_A=" << ya << endl;
     cout << "# z=" << cross_section.z(pt1,pt2,y1,y2) <<", 1-z=" << cross_section.z(pt2,pt1,y2,y1)
     << " xa=" << cross_section.xa(pt1,pt2,y1,y2,sqrts)
     << " xh=" << cross_section.xh(pt1,pt2,y1,y2,sqrts) << endl;
     cout << "# Q_s = " << 1.0/amplitude.SaturationScale(
         std::log(0.01/cross_section.xa(pt1,pt2,y1,y2,sqrts)), 0.5 ) << " GeV " << endl;
 
-    
 
     ///DEBUG    
     /*amplitude.InitializeInterpolation(y1);
@@ -139,13 +138,13 @@ int main(int argc, char* argv[])
 
     amplitude.InitializeInterpolation(
         std::log(0.01 / cross_section.xa(pt1,pt2,y1,y2,sqrts)) );
-    double normalization =1;// cross_section.Sigma(pt1, pt2, y1, y2, sqrts);
+    double normalization = cross_section.Sigma(pt1, pt2, y1, y2, sqrts);
     cout << "# Normalization totxs " << normalization << endl;
-
+    normalization=1;
     for (double theta=1; theta<2.0*M_PI-1; theta+=0.075)
     {
-        double result = cross_section.dSigma(pt1,pt2,y1,y2,theta,sqrts);
-            //+ cross_section.dSigma(pt2,pt1,y2,y1,theta,sqrts);
+        double result = cross_section.dSigma(pt2,pt1,y2,y1,theta,sqrts);
+          //  + cross_section.dSigma(pt2,pt1,y2,y1,theta,sqrts);
         //double result = cross_section.NPair(theta, sqrts);
         cout << theta << " " << result/normalization << endl;
     }

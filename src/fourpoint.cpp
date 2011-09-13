@@ -4,6 +4,7 @@
 #include <gsl/gsl_monte_miser.h>
 #include <gsl/gsl_monte_vegas.h>
 #include <gsl/gsl_integration.h>
+#include <gsl/gsl_sf_bessel.h>
 #include <cmath>
 
 using std::cos;
@@ -21,7 +22,7 @@ struct Inthelper_correction
     double phi;
     AmplitudeLib* N;
 
-    double u1,u2,r,theta1,theta2,thetar;
+    double u1,u2,r,theta1,theta2,thetar,z;
 };
 
 double Inthelperf_correction(double* vec, size_t dim, void* p);
@@ -29,9 +30,11 @@ double NormalizeAngle(double phi);
 
 double Lx(double x, double y, AmplitudeLib* N);
 
-double CrossSection2::CorrectionTerm(double pt1, double pt2, double ya, double phi)
+double CrossSection2::CorrectionTerm(double pt1, double pt2, double ya, double phi,
+        double z)
 
 {
+    cerr << "Calculating correction at phi=" << phi << endl;
 
     /*
      * We need to integrate over u,u',r and their corresponding angles
@@ -43,11 +46,11 @@ double CrossSection2::CorrectionTerm(double pt1, double pt2, double ya, double p
 
     N->SetOutOfRangeErrors(false);
     double minlnr = std::log(1e-2);
-    double maxlnr = std::log(N->MaxR());
+    double maxlnr = std::log(1000);
 
     Inthelper_correction helper;
     helper.pt1=pt1; helper.pt2=pt2; helper.phi=phi; helper.ya=ya;
-    helper.N=N;
+    helper.N=N; helper.z=z;
 
     ///debug
     /*
@@ -63,7 +66,7 @@ double CrossSection2::CorrectionTerm(double pt1, double pt2, double ya, double p
     }
     exit(1);
     */
-    size_t calls = 1e4;
+    size_t calls = 1e9;
 
     gsl_monte_function G = {&Inthelperf_correction, 6, &helper};
 
@@ -82,7 +85,7 @@ double CrossSection2::CorrectionTerm(double pt1, double pt2, double ya, double p
         /*double lower[6] = {minlnr, minlnr, minlnr, 0, 0, 0};
         double upper[6] = {maxlnr, maxlnr,maxlnr, 2.0*M_PI, 2.0*M_PI, 2.0*M_PI};
         */
-        double minr=0.001; double maxr=10;
+        double minr=std::log(0.001); double maxr=std::log(1000);
         /*
         // cubes 1,3,5,7: u1 starts from log(MinR())
         if (cube%2==0)  
@@ -183,9 +186,8 @@ double Inthelperf_correction(double* vec, size_t dim, void* p)
     // vec[3]=theta_u1, vec[4]=theta_u2
     // vec[5]=theta_r
     // angles are within range [0, 2\pi]
-   // double u1 = std::exp(vec[0]); double u2=std::exp(vec[1]);
-    //double r=std::exp(vec[2]);
-    double u1=vec[0]; double u2=vec[1]; double r=vec[2];
+    double u1 = std::exp(vec[0]); double u2=std::exp(vec[1]); double r=std::exp(vec[2]);
+    //double u1=vec[0]; double u2=vec[1]; double r=vec[2];
     double theta1=vec[3];
     double theta2=vec[4]; double thetar = vec[5];
 
@@ -253,11 +255,15 @@ double Inthelperf_correction(double* vec, size_t dim, void* p)
     // Wave function product
     // \phi^*(u2) \phi(u) summed over spins and polarization
     // simple resul in massless z=0 case
-    result *= -16.0*SQR(M_PI) * u1_dot_u2 / ( SQR(u1)*SQR(u2) );
+    //result *= -16.0*SQR(M_PI) * u1_dot_u2 / ( SQR(u1)*SQR(u2) );
+    // with masses and z!=0
+    result *= -8.0*SQR(M_PI)*SQR(par->z)*SQR(M_Q)*(2.0-par->z)*u1_dot_u2/(u1*u2)
+                * gsl_sf_bessel_K1(par->z*M_Q*u1)
+                * gsl_sf_bessel_K1(par->z*M_Q*u2);
 
     result *= u1*u2*r;   // d^2 u_1 d^2 u2 d^2 r = du_1 du_2 dr u_1 u_2 u_3 d\theta_i
 
-    //result *= u1*u2*r;  // multiply by e^(ln u1) e^(ln u2) e^(ln r) due to the
+    result *= u1*u2*r;  // multiply by e^(ln u1) e^(ln u2) e^(ln r) due to the
                         // change of variables (Jacobian)
 
     result /= std::pow(2.0*M_PI, 6);    // integration measures

@@ -9,7 +9,7 @@
 #include <gsl/gsl_monte_miser.h>
 #include <gsl/gsl_monte_plain.h>
 #include <gsl/gsl_monte_vegas.h>
-
+#include <gsl/gsl_sf_bessel.h>
 #include <gsl/gsl_monte.h>
 
 
@@ -63,7 +63,6 @@ double CrossSection2::dSigma(double pt1, double pt2, double y1, double y2, doubl
     //return dSigma_lo(pt1, pt2, y1,y2, phi, sqrts);
     double result=0;
     double tmpz = z(pt1, pt2, y1, y2);
-    tmpz=0;
     double tmpxa = xa(pt1, pt2, y1, y2, sqrts);
     double ya = std::log(0.01/tmpxa);
     //N->InitializeInterpolation(ya);
@@ -74,7 +73,7 @@ double CrossSection2::dSigma(double pt1, double pt2, double y1, double y2, doubl
     {
         #pragma omp section
         {
-            g = G(pt2, tmpxa);
+            g = G(pt2, tmpxa, tmpz);
         }
         #pragma omp section
         {
@@ -93,26 +92,35 @@ double CrossSection2::dSigma(double pt1, double pt2, double y1, double y2, doubl
     double kzdeltasqr = SQR(1.0-tmpz)*SQR(pt1) + SQR(tmpz*pt2) - 2.0*tmpz*(1.0-tmpz)
                                 * pt1*pt2*std::cos(phi);
     
-    result = SQR(g) + 1.0/kzdeltasqr
-        - 2.0*g*( (1.0-tmpz)*SQR(pt1) - tmpz*pt1*pt2*std::cos(phi) ) / ( pt1*kzdeltasqr );
-
+    //result = SQR(g) + 1.0/kzdeltasqr
+    //    - 2.0*g*( (1.0-tmpz)*SQR(pt1) - tmpz*pt1*pt2*std::cos(phi) ) / ( pt1*kzdeltasqr );
+    result = SQR(g) + 1.0/kzdeltasqr + 2.0*g*( (1.0-tmpz)*pt1*pt2*std::cos(phi)
+                    - tmpz*SQR(pt2) ) / ( pt2*kzdeltasqr );
     result *= 2.0*(1.0+SQR(1.0-tmpz) );
     
 
     result *= f;
-    
     // Add correction term following from more exact calculationg of the
     // 4-point function
-    /*cout << "# Result w.o. corrections = " << result << endl;
-    double correction = CorrectionTerm_fft(pt1,pt2, ya, phi);
-    cout << "# relcorrection = " << std::abs(correction/result) << endl;
-    cout << "# Exiting at " << LINEINFO << endl;
+    cout << "# Result w.o. corrections = " << result << endl;
+    CalculateCorrection_fft(ya, tmpz);
+    
+    double correction = CorrectionTerm_fft(pt1,pt2, ya, phi, tmpz);
+
+    ///DEBUG
+    for(double p=M_PI/10; p<2.0*M_PI; p+=M_PI/10)
+    {
+        #pragma omp critical
+        cout << p << " " << CorrectionTerm_fft(pt1,pt2, ya, p, tmpz) << endl;
+    }
+    cerr << "# relcorrection = " << std::abs(correction/result) << endl;
+    cerr << "# Exiting at " << LINEINFO << endl;
     exit(1);
     result+=correction;
-    */
+    
     double tmpxh = xh(pt1, pt2, y1, y2, sqrts);
 
-    /*if (multiply_pdf)
+    if (multiply_pdf)
         result *= 2.0*(pdf->xq(tmpxh, delta, UVAL) + pdf->xq(tmpxh, delta, DVAL));
         // factor 2 from isospin symmetry: xf_u,p = xf_d,n
 
@@ -127,8 +135,8 @@ double CrossSection2::dSigma(double pt1, double pt2, double y1, double y2, doubl
     result *= pt1*pt2;  // d^2 pt_1 d^2 pt2 => dpt_1 dpt_2
 
     // Overall constants
-    result *= ALPHAS*Cf/(4.0*SQR(M_PI));
-    */
+    //result *= ALPHAS*Cf/(4.0*SQR(M_PI));
+    
     return result;
 }
 
@@ -306,17 +314,18 @@ double NPairHelperf(double* vec, size_t dim, void* p)
 /*
  * Funktion G_{x_A} = \int dr (1-N(r)) J_1(k*r)
  * as in ref. 0708.0231 but w.o. vector k/|k|
+ * Default value of z=0
  */
-struct G_helper { double y; AmplitudeLib* N; double kt; };
+struct G_helper { double y; AmplitudeLib* N; double kt; double z; };
 double G_helperf(double r, void* p);
-double CrossSection2::G(double kt, double x)
+double CrossSection2::G(double kt, double x, double z)
 {
     if (std::abs(kt - gcachek) < 0.001)
         return gcacheval;
     
     G_helper helper;
     helper.y = std::log(0.01/x);
-    helper.N=N; helper.kt=kt;
+    helper.N=N; helper.kt=kt; helper.z=z;
 
     set_fpu_state();
     init_workspace_fourier(700);   // number of bessel zeroes, max 2000
@@ -330,12 +339,26 @@ double CrossSection2::G(double kt, double x)
 double G_helperf(double r, void *p)
 {
     G_helper* par = (G_helper*) p;
-    double result=0;
-    if (r< par->N->MinR()) result = 1.0;
-    else if (r > par->N->MaxR()) result=0;
-    else result = 1.0 - par->N->N(r, par->y);
+    // Massless case
+    if (M_Q<1e-5 or par->z<1e-5)
+    {
+        double result=0;
+        if (r< par->N->MinR()) result = 1.0;
+        else if (r > par->N->MaxR()) result=0;
+        else result = 1.0 - par->N->N(r, par->y);
 
-    return result;
+        return result;
+    }
+
+    // m,z>0
+    double result=0;
+    if (r< par->N->MinR()) result = r*gsl_sf_bessel_K1(r*M_Q*par->z);
+    else if (r>par->N->MaxR()) result=0;
+    else result = r*gsl_sf_bessel_K1(r*M_Q*par->z)*par->N->S(r, par->y);
+
+    return M_Q*par->z*result;
+    
+    
 }
 
 
@@ -345,6 +368,7 @@ CrossSection2::CrossSection2(AmplitudeLib* N_, PDF* pdf_,FragmentationFunction* 
     gcacheval=-1;
     gcachek=-1;
     fcacheval=-1; fcachek=-1;
+    transform=NULL;
 }
 
 
@@ -379,4 +403,10 @@ PDF* CrossSection2::Pdf()
 FragmentationFunction* CrossSection2::FragFun()
 {
     return fragfun;
+}
+
+CrossSection2::~CrossSection2()
+{
+    if (transform!=NULL)
+        delete[] transform;
 }
