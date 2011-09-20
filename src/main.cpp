@@ -93,6 +93,8 @@ int main(int argc, char* argv[])
     
     cout <<"# Parton distribution function used: " << pdf->GetString() << endl;
 
+    cout <<"# Quark mass: " << M_Q << " GeV" << endl;
+
     
     if (Q>=0)   // Plot PDF and exit
     {
@@ -138,13 +140,13 @@ int main(int argc, char* argv[])
 
     amplitude.InitializeInterpolation(
         std::log(0.01 / cross_section.xa(pt1,pt2,y1,y2,sqrts)) );
-    double normalization = cross_section.Sigma(pt1, pt2, y1, y2, sqrts);
+    double normalization = 1;//cross_section.Sigma(pt1, pt2, y1, y2, sqrts);
     cout << "# Normalization totxs " << normalization << endl;
     normalization=1;
-    for (double theta=1; theta<2.0*M_PI-1; theta+=0.075)
+    for (double theta=3*M_PI/10.0; theta<2.0*M_PI; theta+=M_PI/10)
     {
-        double result = cross_section.dSigma(pt2,pt1,y2,y1,theta,sqrts);
-          //  + cross_section.dSigma(pt2,pt1,y2,y1,theta,sqrts);
+        double result = cross_section.dSigma(pt1,pt2,y1,y2,theta,sqrts);
+             //cross_section.dSigma(pt2,pt1,y2,y1,theta,sqrts);
         //double result = cross_section.NPair(theta, sqrts);
         cout << theta << " " << result/normalization << endl;
     }

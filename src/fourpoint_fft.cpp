@@ -18,7 +18,7 @@
 #include <string>
 #include <sstream>
 
-const double R_RANGE = 8;
+const double R_RANGE = 7;
 
 const bool READFILE = false; // Read integrand from a file
 
@@ -197,7 +197,7 @@ void CrossSection2::CalculateCorrection_fft(double ya, double z)
                     
                                 //<< " prevres " << data[index]
                                 //<< " rx " << rx << " ry " << ry << " vx " << vx << " vy " << vy << endl;
-                                
+                               /*
                                 cout << index << std::setprecision(6) << " " << data[index].real() <<
                                 " " << rx << " " << ry << " " << vx << " " << vy << endl;
                                 cout << index2 << std::setprecision(6)<< " " << data[index].real() << " " << -rx << " "
@@ -206,7 +206,7 @@ void CrossSection2::CalculateCorrection_fft(double ya, double z)
                                 " " << rx << " " << -ry << " " << vx << " " << -vy << endl;
                                 cout << index4 << std::setprecision(6)<< " " << data[index].real() <<
                                 " " << -rx << " " << -ry << " " << -vx << " " << -vy << endl;
-                                
+                                */
                             }
                         } // end omp critical
                    // }
@@ -340,6 +340,7 @@ double CrossSection2::V2int(double rx, double ry, double v1x, double v1y, double
             0, VINTACCURACY, VINTINTERVALS, GSL_INTEG_GAUSS41, workspace,
             &result, &abserr);
     gsl_integration_workspace_free(workspace);
+    result *= -8.0*SQR(M_PI)*SQR(M_Q)*SQR(z);
 
     if (status)
         cerr << "v2rint failed at " << LINEINFO <<", result " << result
@@ -442,13 +443,22 @@ double Inthelperf_v2thetaint(double theta, void* p)
 
     // wave function product
 
-
+    // Factor -8pi^2 m^2 z^2 is outside the integral
+    result *= (1.0+SQR(1.0-par->z))
+             *(SQR(par->v2_r)-0.25*(SQR(v1x) + SQR(v1y)))
+                / (v2_m_05v1 * v2_p_05v1)
+             * gsl_sf_bessel_K1(par->z*M_Q*v2_m_05v1)
+             * gsl_sf_bessel_K1(par->z*M_Q*v2_p_05v1)
+            - SQR(par->z)*gsl_sf_bessel_K0(par->z*M_Q*v2_m_05v1)
+             * gsl_sf_bessel_K0(par->z*M_Q*v2_p_05v1)  ;
     
+/*    
     result *= -8.0*SQR(M_PI)*(2.0-par->z)*SQR(par->z)*SQR(M_Q)
                 * gsl_sf_bessel_K1(par->z*M_Q*v2_m_05v1)
                 * gsl_sf_bessel_K1(par->z*M_Q*v2_p_05v1)
                 * (SQR(par->v2_r)-0.25*(SQR(v1x) + SQR(v1y)) )
                   / (v2_m_05v1 * v2_p_05v1);
+  */      
 
     // m,z=0
     /*
@@ -456,6 +466,8 @@ double Inthelperf_v2thetaint(double theta, void* p)
         * ( SQR(v2x) + SQR(v2y) - 0.25*(SQR(v1x) + SQR(v1y)) )
         / ( SQR(v2_m_05v1) * SQR(v2_p_05v1) );
     */
+
+    /*
     if (isnan(result))
     {
         cerr << "Result is NaN at " << LINEINFO << endl;
@@ -465,6 +477,7 @@ double Inthelperf_v2thetaint(double theta, void* p)
         cerr << result << " at " << LINEINFO << ", v2m05v1 " << v2_m_05v1 <<
          " " << " v2p05v1 " << v2_p_05v1 << " r " << std::sqrt(rsqr)
          << " v2r " << par->v2_r << " theta " << theta <<  endl;
+    */
     
     return result;
 

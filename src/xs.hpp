@@ -35,8 +35,10 @@ class CrossSection2
         double xh(double pt1, double pt2, double y1, double y2, double sqrts);
         double Delta(double pt1, double pt2, double theta);
 
-        // \int dr S(r) J_1(k*r)
+        // \int dr r*S(r)*K_1(mzr)*J1(kr)
         double G(double kt, double x, double z=0);
+        // \int dr r*S(r)*K_0(mzr)*J0(kr)
+        double H(double kt, double x, double z);
 
         PDF* Pdf();
         FragmentationFunction* FragFun(); 
@@ -57,6 +59,6 @@ class CrossSection2
         double V2int(double rx, double ry, double v1x, double v1y, double y, double z);
         
 };
-const double M_Q = 1; //0.14;  // GeV
+const double M_Q =1; //0.14;  // GeV
 
 #endif

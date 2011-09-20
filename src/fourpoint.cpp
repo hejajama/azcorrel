@@ -21,6 +21,7 @@ struct Inthelper_correction
     double pt1,pt2,ya;
     double phi;
     AmplitudeLib* N;
+    size_t calln; int monte;
 
     double u1,u2,r,theta1,theta2,thetar,z;
 };
@@ -29,12 +30,11 @@ double Inthelperf_correction(double* vec, size_t dim, void* p);
 double NormalizeAngle(double phi);
 
 double Lx(double x, double y, AmplitudeLib* N);
-
+size_t calls = 5e9;
 double CrossSection2::CorrectionTerm(double pt1, double pt2, double ya, double phi,
         double z)
 
 {
-    cerr << "Calculating correction at phi=" << phi << endl;
 
     /*
      * We need to integrate over u,u',r and their corresponding angles
@@ -45,12 +45,16 @@ double CrossSection2::CorrectionTerm(double pt1, double pt2, double ya, double p
     // pt1=k, pt2=q
 
     N->SetOutOfRangeErrors(false);
-    double minlnr = std::log(1e-2);
-    double maxlnr = std::log(1000);
+    //double minlnr = std::log(1e-5);
+    //double maxlnr = std::log(1e8);
+    double minr=std::log(0.001); double maxr=std::log(10000);
+    
 
-    Inthelper_correction helper;
-    helper.pt1=pt1; helper.pt2=pt2; helper.phi=phi; helper.ya=ya;
-    helper.N=N; helper.z=z;
+    cerr << "Calculating correction at phi=" << phi <<", z=" << z
+    << " ya=" << ya <<", pt1=" << pt1 << " pt2=" << pt2 <<" M_Q=" << M_Q << "GeV" <<
+    " maxr " << std::exp(maxr) << " calls " << calls << endl;
+
+    
 
     ///debug
     /*
@@ -66,11 +70,11 @@ double CrossSection2::CorrectionTerm(double pt1, double pt2, double ya, double p
     }
     exit(1);
     */
-    size_t calls = 1e9;
+    
 
-    gsl_monte_function G = {&Inthelperf_correction, 6, &helper};
+    
 
-    double sum=0;
+
     int cube=0;
     // Parallel: divide cube into 8 parts
     /*
@@ -85,7 +89,7 @@ double CrossSection2::CorrectionTerm(double pt1, double pt2, double ya, double p
         /*double lower[6] = {minlnr, minlnr, minlnr, 0, 0, 0};
         double upper[6] = {maxlnr, maxlnr,maxlnr, 2.0*M_PI, 2.0*M_PI, 2.0*M_PI};
         */
-        double minr=std::log(0.001); double maxr=std::log(1000);
+        
         /*
         // cubes 1,3,5,7: u1 starts from log(MinR())
         if (cube%2==0)  
@@ -108,10 +112,18 @@ double CrossSection2::CorrectionTerm(double pt1, double pt2, double ya, double p
        
         cout << "-----------" << endl;
     double res;
+    // Constants taken out from integral in order to reduse number of
+    // products in integrand
+    double constants = -8.0*SQR(M_PI)*SQR(z)*SQR(M_Q)/std::pow(2.0*M_PI, 6);
     #pragma omp parallel sections
     {
         #pragma omp section
         {
+            Inthelper_correction helper;
+            helper.pt1=pt1; helper.pt2=pt2; helper.phi=phi; helper.ya=ya;
+            helper.N=N; helper.z=z; helper.calln=0; helper.monte=1;
+            gsl_monte_function G = {&Inthelperf_correction, 6, &helper};
+    
             double result,abserr;
             double lower[6] = {minr, minr, minr, 0, 0, 0};
             double upper[6] = {maxr, maxr,maxr, 2.0*M_PI, 2.0*M_PI, 2.0*M_PI};
@@ -121,10 +133,16 @@ double CrossSection2::CorrectionTerm(double pt1, double pt2, double ya, double p
                                         &result, &abserr);
             gsl_monte_plain_free (s);
             gsl_rng_free(r);
+            result *= constants;
             cout << "# plain result: " << result << " relerr " << std::abs(abserr/result) << endl;
        }
         #pragma omp section
         {
+            Inthelper_correction helper;
+            helper.pt1=pt1; helper.pt2=pt2; helper.phi=phi; helper.ya=ya;
+            helper.N=N; helper.z=z; helper.calln=0; helper.monte=2;
+            gsl_monte_function G = {&Inthelperf_correction, 6, &helper};
+            
             double result,abserr;
             double lower[6] = {minr, minr, minr, 0, 0, 0};
             double upper[6] = {maxr, maxr,maxr, 2.0*M_PI, 2.0*M_PI, 2.0*M_PI};
@@ -134,37 +152,73 @@ double CrossSection2::CorrectionTerm(double pt1, double pt2, double ya, double p
                                         &result, &abserr);
              gsl_monte_miser_free (s);
             gsl_rng_free(r);
+            result *= constants;    // integration measures
              cout <<"# miser result: " << result << " relerr " << std::abs(abserr/result) << endl;
         }
         #pragma omp section
         {
+            Inthelper_correction helper;
+            helper.pt1=pt1; helper.pt2=pt2; helper.phi=phi; helper.ya=ya;
+            helper.N=N; helper.z=z; helper.calln=0; helper.monte=3;
+            gsl_monte_function G = {&Inthelperf_correction, 6, &helper};
+            
             double result,abserr;
             double lower[6] = {minr, minr, minr, 0, 0, 0};
             double upper[6] = {maxr, maxr,maxr, 2.0*M_PI, 2.0*M_PI, 2.0*M_PI};
             gsl_rng *r = gsl_rng_alloc(T);
             gsl_monte_vegas_state *s = gsl_monte_vegas_alloc (6);
          
-             gsl_monte_vegas_integrate (&G, lower, upper, 6, calls/5, r, s,
+            gsl_monte_vegas_integrate (&G, lower, upper, 6, calls/5, r, s,
                                         &result, &abserr);
+            result *= constants;    // integration measures
              cout << "# cube " << cube << " Vegas warmup: " << result << " relerr " << std::abs(abserr/result) << endl;
             int i=0;
-             do
-               {
-             gsl_monte_vegas_integrate (&G, lower, upper, 6, calls/2, r, s,
+            do
+            {
+                helper.calln=0;
+                gsl_monte_vegas_integrate (&G, lower, upper, 6, calls/2, r, s,
                                         &result, &abserr);
-                 cout << "cube " << cube << " result = " << result << " relerr = " << std::abs(abserr/result)
+                result *= constants;   // integration measures
+                cout << "cube " << cube << " result = " << result << " relerr = " << std::abs(abserr/result)
                          << " chisq/dof = " << gsl_monte_vegas_chisq (s) << endl;
                 i++;
-               }
-             while (fabs (gsl_monte_vegas_chisq (s) - 1.0) > 0.5 or i<5);
-         
-             gsl_monte_vegas_free (s);
-             gsl_rng_free(r);
+            }
+            while (fabs (gsl_monte_vegas_chisq (s) - 1.0) > 0.5 or i<5);
 
-             res=result;
-             
-        }
-    }
+            gsl_monte_vegas_free (s);
+            gsl_rng_free(r);
+
+            res=result;
+        }// end omp section
+
+        /*#pragma omp section
+        {
+            // own parallel monte carlo
+            Inthelper_correction helper;
+            helper.pt1=pt1; helper.pt2=pt2; helper.phi=phi; helper.ya=ya;
+            helper.N=N; helper.z=z; helper.calln=0; helper.monte=4;
+            gsl_rng *r = gsl_rng_alloc(T);
+            double sum=0;
+            double vec[6];
+            #pragma omp parallel for private(vec) reduction(+:sum)
+            for (size_t i=0; i<calls; i++)
+            {
+                vec[0]=gsl_rng_uniform(r)*2.0*M_PI;
+                vec[1]=gsl_rng_uniform(r)*2.0*M_PI;
+                vec[2]=gsl_rng_uniform(r)*2.0*M_PI;
+                vec[3] = minr + gsl_rng_uniform(r)*(maxr-minr);
+                vec[4] = minr + gsl_rng_uniform(r)*(maxr-minr);
+                vec[5] = minr + gsl_rng_uniform(r)*(maxr-minr);
+                double tmp = Inthelperf_correction(vec, 6, &helper);
+                sum = sum+tmp;
+            }
+            gsl_rng_free(r);
+            cout <<"# Parallel: " << sum*std::pow(2.0*M_PI*(maxr-minr),3)/calls << endl;
+        }*/
+
+
+        
+   } // end omp sections
     //gsl_rng_free(r);
    // }
 
@@ -180,7 +234,11 @@ double CrossSection2::CorrectionTerm(double pt1, double pt2, double ya, double p
 
 double Inthelperf_correction(double* vec, size_t dim, void* p)
 {
+    
     Inthelper_correction* par = (Inthelper_correction*)p;
+    #pragma omp critical
+    par->calln++;
+    if (par->calln%(calls/50)==0) cout <<"# Monte " << par->monte << " done " << (double)par->calln/calls << endl;
 
     // vec[0]= ln u1, vec[1]=ln u2, vec[2]= ln
     // vec[3]=theta_u1, vec[4]=theta_u2
@@ -223,14 +281,28 @@ double Inthelperf_correction(double* vec, size_t dim, void* p)
     double u2r_sqr = SQR(u2)+SQR(r) - 2.0*u2_dot_r;
     double u2r = std::sqrt(u2r_sqr);
 
+    // S(u1-u2+r)
+    double s_u1u2r = N->S(u1u2r,y);
+    // S(u1)
+    double s_u1 = N->S(u1,y);
+    // S(u2)
+    double s_u2 = N->S(u2,y);
+    // S(r)
+    double s_r = N->S(r,y);
+
     // Contribution from e^(ik(u'-u)) e^(-i \Delta r),
     // k = pt1, \delta = pt1+pt2
     // Take only real part
-    double result = cos(pt1_dot_u2 - pt1_dot_u1)*cos(pt1_dot_r + pt2_dot_r)
-        + sin(pt1_dot_u2 - pt1_dot_u1)*sin(pt1_dot_r + pt2_dot_r);
+    //double result = cos(pt1_dot_u2 - pt1_dot_u1)*cos(pt1_dot_r + pt2_dot_r)
+   //     + sin(pt1_dot_u2 - pt1_dot_u1)*sin(pt1_dot_r + pt2_dot_r);
 
-    result *= N->S(u1u2r, y) *
-        ( N->S(u1, y) * N->S(u2,y) - N->S(r, y) * N->S(u1u2r, y) );
+    // SHOULD go to zero with this
+    double result = sin(pt1_dot_u2 - pt1_dot_u1)*cos(pt1_dot_r+pt2_dot_r)
+        - cos(pt1_dot_u2 - pt1_dot_u1)*sin(pt1_dot_r+pt2_dot_r);
+
+    //result *= N->S(u1u2r, y) *
+    //    ( N->S(u1, y) * N->S(u2,y) - N->S(r, y) * N->S(u1u2r, y) );
+    result *= s_u1u2r * (s_u1 * s_u2 - s_r * s_u1u2r);
 
     // Finally multiply by complicated F/F factor
     /*REAL f1 = Lx(u2r,y,N) - Lx(r,y,N) + Lx(u1r,y,N) - Lx(u1u2r,y,N);
@@ -240,10 +312,10 @@ double Inthelperf_correction(double* vec, size_t dim, void* p)
 
     REAL minsprod = 1e-15;  /// result should not depend on this!
     REAL nom1 = N->S(u2r, y)*N->S(u1r, y);
-    REAL denom1 = N->S(r,y)*N->S(u1u2r,y);
+    REAL denom1 = s_r * s_u1u2r; //N->S(r,y)*N->S(u1u2r,y);
     if (nom1 < minsprod or denom1 < minsprod) return 0;
 
-    REAL nom2 = N->S(u1, y)*N->S(u2, y);
+    REAL nom2 = s_u1*s_u2; //N->S(u1, y)*N->S(u2, y);
     REAL denom2 = denom1; // optimize, same as before, N->S(r,y)*N->S(u1u2r,y);
     if (nom2 < minsprod or denom2 < minsprod or
         std::abs(nom2/denom2-1.0) < minsprod ) return 0;
@@ -256,22 +328,26 @@ double Inthelperf_correction(double* vec, size_t dim, void* p)
     // \phi^*(u2) \phi(u) summed over spins and polarization
     // simple resul in massless z=0 case
     //result *= -16.0*SQR(M_PI) * u1_dot_u2 / ( SQR(u1)*SQR(u2) );
-    // with masses and z!=0
-    result *= -8.0*SQR(M_PI)*SQR(par->z)*SQR(M_Q)*(2.0-par->z)*u1_dot_u2/(u1*u2)
+    // with masses and z!=0 a bit more complicated:
+    // -8pi^2 m^2 z^2 [ K_1(mzu) K_1(mzu') u.u'/(uu') [1+(1-z)^2]
+    //                - z^2 K_0(mzu)K_0(mzu') ]
+    // In order to optimize, factor -8*pi^2*m^2*z^2
+    // is outside the integral
+    result *= (1.0+SQR(1.0-par->z))*u1_dot_u2 /(u1*u2)
                 * gsl_sf_bessel_K1(par->z*M_Q*u1)
-                * gsl_sf_bessel_K1(par->z*M_Q*u2);
+                * gsl_sf_bessel_K1(par->z*M_Q*u2)
+              - SQR(par->z)*gsl_sf_bessel_K0(par->z*M_Q*u1)
+                * gsl_sf_bessel_K0(par->z*M_Q*u2)  ;
 
     result *= u1*u2*r;   // d^2 u_1 d^2 u2 d^2 r = du_1 du_2 dr u_1 u_2 u_3 d\theta_i
 
     result *= u1*u2*r;  // multiply by e^(ln u1) e^(ln u2) e^(ln r) due to the
                         // change of variables (Jacobian)
 
-    result /= std::pow(2.0*M_PI, 6);    // integration measures
-
     //cout << "u1 " << u1 << " u2 " << u2 << " r " << r << " result " << result << endl;
 
-    if (isnan(result))
-     cerr <<" nan at " << "u1 " << u1 << " u2 " << u2 << " r " << r  << endl;
+    //if (isnan(result))
+   //  cerr <<" nan at " << "u1 " << u1 << " u2 " << u2 << " r " << r  << endl;
 
     return result;
 }
