@@ -69,6 +69,7 @@ double CrossSection2::dSigma(double pt1, double pt2, double y1, double y2, doubl
     double delta = Delta(pt1,pt2,phi);
     //cout << "# phi " << phi << " delta " << delta << endl;
     double g=0,f=0;
+    /*
     #pragma omp parallel sections
     {
         #pragma omp section
@@ -85,27 +86,28 @@ double CrossSection2::dSigma(double pt1, double pt2, double y1, double y2, doubl
             }
         }
     }
-
+    */
+    g = G(pt2, tmpxa, tmpz); f=N->S_k(delta, ya);
     
 
     // (k - z\delta)^2 = (1-z)^2 pt1^2 + z^2 pt2^2 - 2*z*(1-z)*pt1*pt2*cos \phi
     double kzdeltasqr = SQR(1.0-tmpz)*SQR(pt1) + SQR(tmpz*pt2) - 2.0*tmpz*(1.0-tmpz)
                                 * pt1*pt2*std::cos(phi);
     // m=0
-    /*result = SQR(g) + 1.0/kzdeltasqr + 2.0*g*( (1.0-tmpz)*pt1*pt2*std::cos(phi)
+    if (M_Q < 1e-5)
+        result = SQR(g) + 1.0/kzdeltasqr + 2.0*g*( (1.0-tmpz)*pt1*pt2*std::cos(phi)
                     - tmpz*SQR(pt2) ) / ( pt2*kzdeltasqr );
-    cout <<"m=0: " << result << " ";
-    */
-    // m!= 0
-    result = SQR(g) + kzdeltasqr/SQR(kzdeltasqr + SQR(M_Q*tmpz))
-        + 2.0*g*( (1.0-tmpz)*pt1*pt2*std::cos(phi) - tmpz*SQR(pt2) )
-            / (pt2* ( kzdeltasqr + SQR(M_Q*tmpz) ) )
-     + 2.0*SQR( H(pt2, tmpxa, tmpz) - M_Q*SQR(tmpz)/(kzdeltasqr + SQR(M_Q*tmpz)) );
-    //cout <<"  m!=0: " << result << endl;
+    else // m!= 0
+        result = SQR(g) + kzdeltasqr/SQR(kzdeltasqr + SQR(M_Q*tmpz))
+            + 2.0*g*( (1.0-tmpz)*pt1*pt2*std::cos(phi) - tmpz*SQR(pt2) )
+                / (pt2* ( kzdeltasqr + SQR(M_Q*tmpz) ) )
+            + 2.0*SQR( H(pt2, tmpxa, tmpz) - M_Q*SQR(tmpz)/(kzdeltasqr + SQR(M_Q*tmpz)) );
+    
     result *= 2.0*(1.0+SQR(1.0-tmpz) );
     
 
     result *= f;
+    
     // Add correction term following from more exact calculationg of the
     // 4-point function
     cout << "# Result w.o. corrections = " << result << endl;
@@ -132,6 +134,7 @@ double CrossSection2::dSigma(double pt1, double pt2, double y1, double y2, doubl
     cerr << "# Exiting at " << LINEINFO << endl;
     exit(1);
     result-=correction;
+    
     
     double tmpxh = xh(pt1, pt2, y1, y2, sqrts);
 
@@ -359,7 +362,7 @@ double G_helperf(double r, void *p)
     // Massless case
     if (M_Q<1e-5 or par->z<1e-5)
     {
-        cerr<<"Calculating massless case, are you sure? " << LINEINFO << endl;
+        //cerr<<"Calculating massless case, are you sure? " << LINEINFO << endl;
         double result=0;
         if (r< par->N->MinR()) result = 1.0;
         else if (r > par->N->MaxR()) result=0;
@@ -386,7 +389,7 @@ double H_helperf(double r, void* p);
 double CrossSection2::H(double kt, double x, double z)
 {
     //TODO: Cache?
-    
+    if (M_Q < 1e-5) return 0;
     G_helper helper;
     helper.y = std::log(0.01/x);
     helper.N=N; helper.kt=kt; helper.z=z;

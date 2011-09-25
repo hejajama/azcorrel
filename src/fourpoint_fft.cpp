@@ -18,13 +18,13 @@
 #include <string>
 #include <sstream>
 
-const double R_RANGE = 7;
+const double R_RANGE = 8;
 
 const bool READFILE = false; // Read integrand from a file
 
 void CrossSection2::CalculateCorrection_fft(double ya, double z)
 {
-    Nd = 40;   // Number of datapoints for each dimension
+    Nd = 36;   // Number of datapoints for each dimension
                             // must satisfy Nd%2==0
     const double maxr = R_RANGE;   // Maximum length of vector component
     delta = maxr/Nd*2.0;
@@ -191,7 +191,7 @@ void CrossSection2::CalculateCorrection_fft(double ya, double z)
                             done++;
                             if (data[index].real() != 0 or data[index].imag()!=0)
                             {
-                                if (done % 100 == 0)
+                                if (done % 1000 == 0)
                                 cerr << " # done " << done << "/" << std::pow(Nd, 4)/4
                                     << " (approximation)" << endl;
                     
