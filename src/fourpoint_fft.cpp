@@ -18,13 +18,13 @@
 #include <string>
 #include <sstream>
 
-const double R_RANGE = 8;
+const double R_RANGE = 7;
 
 const bool READFILE = false; // Read integrand from a file
 
 void CrossSection2::CalculateCorrection_fft(double ya, double z)
 {
-    Nd = 36;   // Number of datapoints for each dimension
+    Nd = 20;   // Number of datapoints for each dimension
                             // must satisfy Nd%2==0
     const double maxr = R_RANGE;   // Maximum length of vector component
     delta = maxr/Nd*2.0;
@@ -189,15 +189,16 @@ void CrossSection2::CalculateCorrection_fft(double ya, double z)
                             data[index3]=result;
                             data[index4]=result;
                             done++;
-                            if (data[index].real() != 0 or data[index].imag()!=0)
-                            {
-                                if (done % 1000 == 0)
+                            if (done % 100 == 0)
                                 cerr << " # done " << done << "/" << std::pow(Nd, 4)/4
                                     << " (approximation)" << endl;
+                            if (data[index].real() != 0 or data[index].imag()!=0)
+                            {
+                                
                     
                                 //<< " prevres " << data[index]
                                 //<< " rx " << rx << " ry " << ry << " vx " << vx << " vy " << vy << endl;
-                               /*
+                               
                                 cout << index << std::setprecision(6) << " " << data[index].real() <<
                                 " " << rx << " " << ry << " " << vx << " " << vy << endl;
                                 cout << index2 << std::setprecision(6)<< " " << data[index].real() << " " << -rx << " "
@@ -206,7 +207,7 @@ void CrossSection2::CalculateCorrection_fft(double ya, double z)
                                 " " << rx << " " << -ry << " " << vx << " " << -vy << endl;
                                 cout << index4 << std::setprecision(6)<< " " << data[index].real() <<
                                 " " << -rx << " " << -ry << " " << -vx << " " << -vy << endl;
-                                */
+                                
                             }
                         } // end omp critical
                    // }
@@ -270,7 +271,7 @@ double CrossSection2::CorrectionTerm_fft(double pt1, double pt2,
         << " |delta|: " << std::sqrt(SQR(pt1)+SQR(pt2) + 2.0*pt1*pt2*std::cos(phi))
         << " -> " << std::sqrt(SQR(dx) + SQR(dy)) << ", k: " << pt1 << " -> " << kx
         << " index " << index << " / " << Nd*Nd*Nd*Nd-1 << endl;
-    //cout << phi << " " << transform[index].real()*std::pow(delta,4)/std::pow(2.0*M_PI,6) << endl;
+    //cout << phi << " " << transform[index].double()*std::pow(delta,4)/std::pow(2.0*M_PI,6) << endl;
             
     
     
@@ -340,14 +341,14 @@ double CrossSection2::V2int(double rx, double ry, double v1x, double v1y, double
             0, VINTACCURACY, VINTINTERVALS, GSL_INTEG_GAUSS41, workspace,
             &result, &abserr);
     gsl_integration_workspace_free(workspace);
-    result *= -8.0*SQR(M_PI)*SQR(M_Q)*SQR(z);
+    result *= 8.0*SQR(M_PI)*SQR(M_Q)*SQR(z);
 
     if (status)
         cerr << "v2rint failed at " << LINEINFO <<", result " << result
         << " relerror " << std::abs(abserr/result) << " rx: " << rx << " ry "
         << ry << " v1x " << v1x << " v1y " << v1y << endl;
 
-    return result*helper.s_r_p_v1;
+    return result;
 }
 
 double Inthelperf_v2rint(double lnv2, void* p)
@@ -425,49 +426,64 @@ double Inthelperf_v2thetaint(double theta, void* p)
     double nom1 = N->S(r_m_v2_p_05v1, y)*N->S(r_p_05v1_p_v2, y);
     double denom1 = s_r*s_r_p_v1; //N->S(r,y)*N->S(r_p_v1 ,y);
 
-    REAL nom2 = s_v2_p_05v1 * s_v2_m_05v1; //N->S(v2_p_05v1, y)*N->S(v2_m_05v1, y);
-    if (nom2<=0) return 0;
-    REAL denom2 = denom1; // optimize, same as before
+    double nom2 = s_v2_p_05v1 * s_v2_m_05v1; //N->S(v2_p_05v1, y)*N->S(v2_m_05v1, y);
+    
+    double denom2 = denom1; // optimize, same as before
 
     double result;
+    
+    // 4-point function
+    result = s_r_p_v1*s_v2_p_05v1*s_v2_m_05v1;
+    /*
+	double tmp_4point; 
 
     // F/F
-    if (rsqr < SQR(par->N->MinR())) result=1;
+    // if (rsqr < SQR(par->N->MinR())) tmp_4point=1;
+    if (nom2 <= 0 or denom2 <= 0 or
+            std::abs(nom2/denom2-1.0) < 1e-15 or
+            nom1 <= 0)
+        tmp_4point=0;
     else
-        result = std::log(nom1/denom1) / std::log(nom2/denom2);
+        tmp_4point = std::log(nom1/denom1) / std::log(nom2/denom2);
 
 
-    result *= ( s_v2_p_05v1*s_v2_m_05v1 - s_r*s_r_p_v1 );
+    tmp_4point *= s_r_p_v1*( s_v2_p_05v1*s_v2_m_05v1 - s_r*s_r_p_v1 );
         //N->S(r_p_v1, y) *( N->S(v2_p_05v1, y) * N->S(v2_m_05v1, y)
         // - N->S(r, y)*N->S(r_p_v1, y) );
 
+	result -= tmp_4point;
+	*/
+	// 3point
+	result -= s_v2_p_05v1* N->S(
+		std::sqrt( SQR(v2x+0.5*v1x+rx-par->z*(v2x-0.5*v1x)) 
+			+ 	   SQR(v2y+0.5*v1y+ry-par->z*(v1y-0.*v1y)) ), y );
+	result -= s_v2_m_05v1* N->S(
+		std::sqrt( SQR(v2x-0.5*v1x-rx-par->z*(v2x+0.5*v1x))
+			+      SQR(v2y-0.5*v1y-ry-par->z*(v2y+0.5*v1y))), y );
+	
+	// 2 point
+	result += N->S( std::sqrt( SQR(rx+par->z*v1x) + SQR(ry+par->z*v1y)),y);
+
     // wave function product
 
-    // Factor -8pi^2 m^2 z^2 is outside the integral
+    // Factor 8pi^2 m^2 z^2 is outside the integral
     result *= (1.0+SQR(1.0-par->z))
              *(SQR(par->v2_r)-0.25*(SQR(v1x) + SQR(v1y)))
                 / (v2_m_05v1 * v2_p_05v1)
              * gsl_sf_bessel_K1(par->z*M_Q*v2_m_05v1)
              * gsl_sf_bessel_K1(par->z*M_Q*v2_p_05v1)
-            - SQR(par->z)*gsl_sf_bessel_K0(par->z*M_Q*v2_m_05v1)
+            + SQR(par->z)*gsl_sf_bessel_K0(par->z*M_Q*v2_m_05v1)
              * gsl_sf_bessel_K0(par->z*M_Q*v2_p_05v1)  ;
-    
-/*    
-    result *= -8.0*SQR(M_PI)*(2.0-par->z)*SQR(par->z)*SQR(M_Q)
-                * gsl_sf_bessel_K1(par->z*M_Q*v2_m_05v1)
-                * gsl_sf_bessel_K1(par->z*M_Q*v2_p_05v1)
-                * (SQR(par->v2_r)-0.25*(SQR(v1x) + SQR(v1y)) )
-                  / (v2_m_05v1 * v2_p_05v1);
-  */      
+       
 
     // m,z=0
     /*
-    result *= -16.0*SQR(M_PI)
+    result *= 16.0*SQR(M_PI)
         * ( SQR(v2x) + SQR(v2y) - 0.25*(SQR(v1x) + SQR(v1y)) )
         / ( SQR(v2_m_05v1) * SQR(v2_p_05v1) );
     */
 
-    /*
+    
     if (isnan(result))
     {
         cerr << "Result is NaN at " << LINEINFO << endl;
@@ -477,7 +493,7 @@ double Inthelperf_v2thetaint(double theta, void* p)
         cerr << result << " at " << LINEINFO << ", v2m05v1 " << v2_m_05v1 <<
          " " << " v2p05v1 " << v2_p_05v1 << " r " << std::sqrt(rsqr)
          << " v2r " << par->v2_r << " theta " << theta <<  endl;
-    */
+    
     
     return result;
 

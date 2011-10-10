@@ -1,14 +1,15 @@
-#include "pdf.hpp"
-#include "pdf/mrst.hpp"
-#include "pdf/cteq.hpp"
+#include <pdf/pdf.hpp>
+#include <pdf/mrst.hpp>
+#include <pdf/cteq.hpp>
 #include <tools/config.hpp>
 #include <tools/tools.hpp>
 #include <amplitudelib/amplitudelib.hpp>
 #include "xs.hpp"
-#include "fragmentation/kkp.hpp"
+#include <fragmentation/kkp.hpp>
 #include <iostream>
 #include <cmath>
 #include <gsl/gsl_errno.h>
+#include <sstream>
 
 
 using std::cout; using std::endl;
@@ -28,8 +29,14 @@ int main(int argc, char* argv[])
         cout << "-pdfmode [MRST, CTEQ]: choose pdf" << endl;
         cout << "-pdf Q: plot PDF as a function of x" << endl;
         cout << "-amplitude filename: where to load amplitude data" << endl;
+        cout << "-mcintpoints points" << endl;
         return 0;
     }
+
+    std::stringstream s;
+    for (int i=0; i<argc; i++)
+        s << argv[i] << " ";
+    cout << "# " << s.str() << endl;
 
     gsl_set_error_handler(&ErrHandler);
     std::string filename="amplitude.dat";
@@ -38,6 +45,7 @@ int main(int argc, char* argv[])
     double y1=3.5; double y2=2; double pt1=5; double pt2=3; double sqrts=200;
     double Q=-1;
     PDF *pdf=0;
+    size_t mcintpoints=1e7;
     
     for (int i=1; i<argc; i++)
     {
@@ -71,6 +79,13 @@ int main(int argc, char* argv[])
                 cerr << "Unrecognized PDF " << argv[i+1] << endl;
                 return -1;
             }
+        }
+        else if (string(argv[i])=="-mcintpoints")
+        {
+            std::stringstream tmpstr;
+            tmpstr << argv[i+1];
+            tmpstr >> mcintpoints;
+            
         }
         else if (string(argv[i]).substr(0,1)=="-")
         {
@@ -112,6 +127,7 @@ int main(int argc, char* argv[])
     delete pdf; return 0;
   */  
     CrossSection2 cross_section(&amplitude, pdf, &fragmentation);
+    cross_section.SetMCIntPoints(mcintpoints);
     double ya=std::log(0.01 / cross_section.xa(pt1,pt2,y1,y2,sqrts));
     cout << "# pt1=" << pt1 <<", pt2=" << pt2 <<", y1=" << y1 <<", y2=" << y2 <<
     " y_A=" << ya << endl;
@@ -120,35 +136,29 @@ int main(int argc, char* argv[])
     << " xh=" << cross_section.xh(pt1,pt2,y1,y2,sqrts) << endl;
     cout << "# Q_s = " << 1.0/amplitude.SaturationScale(
         std::log(0.01/cross_section.xa(pt1,pt2,y1,y2,sqrts)), 0.5 ) << " GeV " << endl;
+    cout << "# MC Integration points " << mcintpoints << endl;
 
-
-    ///DEBUG    
-    /*amplitude.InitializeInterpolation(y1);
-    
-    
-    for (int kind=0; kind<80; kind++)
-    {
-        double k = 0.3*std::pow(1.1,kind);
-        double result = 1.0-k*cross_section.G(k, 0.01*std::exp(-y1));
-        //double result = SQR(k)*amplitude.S_k(k, y1);
-        //double result  =amplitude.N_k(k,y);
-        cout << SQR(k) << " " << result << endl;
-
-    }
-    delete pdf; return 0;
-    */
 
     amplitude.InitializeInterpolation(
         std::log(0.01 / cross_section.xa(pt1,pt2,y1,y2,sqrts)) );
     double normalization = 1;//cross_section.Sigma(pt1, pt2, y1, y2, sqrts);
-    cout << "# Normalization totxs " << normalization << endl;
-    cout << "# Theta=2.5 " << cross_section.dSigma(pt1,pt2,y1,y2,2.5,sqrts) << endl;
-    return 0;
-    for (double theta=1.0*M_PI/10.0; theta<2.0*M_PI; theta+=M_PI/30)
+    //cout << "# Normalization totxs " << normalization << endl;
+    //cout << "# Theta=2.5 " << cross_section.dSigma(pt1,pt2,y1,y2,2.5,sqrts) << endl;
+    int points=25;
+    #pragma omp parallel for
+    for (int i=0; i<points; i++)
     {
-        double result = cross_section.dSigma(pt1,pt2,y1,y2,theta,sqrts)
-             +cross_section.dSigma(pt2,pt1,y2,y1,theta,sqrts);
+        double theta = M_PI/10.0 + (2.0*M_PI-M_PI/10.0)*i/((double)points-1.0);
+        double result = cross_section.dSigma(pt1,pt2,y1,y2,theta,sqrts);
+        if (result<-0.5)
+        {
+            #pragma omp critical
+            cout <<"# " << theta <<" MC integral failed " << endl;
+            continue;
+        }
+             //+cross_section.dSigma(pt2,pt1,y2,y1,theta,sqrts);
         //double result = cross_section.NPair(theta, sqrts);
+        #pragma omp critical
         cout << theta << " " << result/normalization << endl;
     }
 

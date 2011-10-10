@@ -9,9 +9,9 @@
 
 #include <tools/config.hpp>
 #include <complex>
-#include "pdf.hpp"
+#include <pdf/pdf.hpp>
 #include <amplitudelib/amplitudelib.hpp>
-#include "fragmentation/fragmentation.hpp"
+#include <fragmentation/fragmentation.hpp>
 
 class CrossSection2
 {
@@ -41,7 +41,9 @@ class CrossSection2
         double H(double kt, double x, double z);
 
         PDF* Pdf();
-        FragmentationFunction* FragFun(); 
+        FragmentationFunction* FragFun();
+
+        void SetMCIntPoints(size_t points);
 
     private:
         AmplitudeLib* N;
@@ -57,6 +59,7 @@ class CrossSection2
         double delta;
 
         double V2int(double rx, double ry, double v1x, double v1y, double y, double z);
+        size_t mcintpoints;
         
 };
 const double M_Q =1; //0.14;  // GeV

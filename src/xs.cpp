@@ -56,6 +56,7 @@ double CrossSection2::dSigma_lo(double pt1, double pt2, double y1, double y2, do
  * Ref. 0708.0231 eq (57)&(54), no k_t factorization/other approximations
  *
  * If pdf=true (default), then multiply by parton distribution function
+ * Returns -1 if integral doesn't converge and MC integral is used
  */
 double CrossSection2::dSigma(double pt1, double pt2, double y1, double y2, double phi,
     double sqrts, bool multiply_pdf)
@@ -81,13 +82,14 @@ double CrossSection2::dSigma(double pt1, double pt2, double y1, double y2, doubl
             if (std::abs(delta - fcachek) < 0.01) f=fcacheval;
             else
             {
-                f = N->S_k(delta, ya);
+                f = N->S_k(delta, ya)/SQR(2.0*M_PI);
                 fcachek=delta; fcacheval=f;
             }
         }
     }
     */
-    g = G(pt2, tmpxa, tmpz); f=N->S_k(delta, ya);
+    
+    g = G(pt2, tmpxa, tmpz); f=N->S_k(delta, ya)/SQR(2.0*M_PI);
     
 
     // (k - z\delta)^2 = (1-z)^2 pt1^2 + z^2 pt2^2 - 2*z*(1-z)*pt1*pt2*cos \phi
@@ -95,46 +97,45 @@ double CrossSection2::dSigma(double pt1, double pt2, double y1, double y2, doubl
                                 * pt1*pt2*std::cos(phi);
     // m=0
     if (M_Q < 1e-5)
+    {
         result = SQR(g) + 1.0/kzdeltasqr + 2.0*g*( (1.0-tmpz)*pt1*pt2*std::cos(phi)
                     - tmpz*SQR(pt2) ) / ( pt2*kzdeltasqr );
+        result *= 2.0*(1.0+SQR(1.0-tmpz) );
+    }
     else // m!= 0
-        result = SQR(g) + kzdeltasqr/SQR(kzdeltasqr + SQR(M_Q*tmpz))
-            + 2.0*g*( (1.0-tmpz)*pt1*pt2*std::cos(phi) - tmpz*SQR(pt2) )
-                / (pt2* ( kzdeltasqr + SQR(M_Q*tmpz) ) )
+        result = 2.0*(1.0+SQR(1.0-tmpz))*(
+            SQR(g) + kzdeltasqr/SQR(kzdeltasqr + SQR(M_Q*tmpz))
+                + 2.0*g*( (1.0-tmpz)*pt1*pt2*std::cos(phi) - tmpz*SQR(pt2) )
+                    / (pt2* ( kzdeltasqr + SQR(M_Q*tmpz) ) )
+            )
             + 2.0*SQR( H(pt2, tmpxa, tmpz) - M_Q*SQR(tmpz)/(kzdeltasqr + SQR(M_Q*tmpz)) );
     
-    result *= 2.0*(1.0+SQR(1.0-tmpz) );
+    
     
 
     result *= f;
-    
-    // Add correction term following from more exact calculationg of the
-    // 4-point function
-    cout << "# Result w.o. corrections = " << result << endl;
+    //#pragma omp critical
+    //cout << "# phi=" << phi << ", result w.o. corrections = " << result << endl;
 
-    // Monte Carlo
+    // CorrectionTerm returns -1 if the integral doesn't converge
     
-    cerr <<"# Calculating MonteCarlo result at phi=" << phi <<"...."<< endl;
-    double tmpres = CorrectionTerm(pt1,pt2,ya,phi,tmpz);
-    cerr <<"# Result " << tmpres << " relerror " << std::abs(tmpres/result) << endl;
-    exit(1);
+    double correction = CorrectionTerm(pt1,pt2,ya,phi,tmpz);
+    if (std::abs(correction+1.0)<0.001) return -1;
+   	result +=correction;
     
-
+    //#pragma omp critical
+    //cout <<"# phi=" << phi <<" MC result " << result << endl;
+    
+    
     //FFT
-    CalculateCorrection_fft(ya, tmpz);
-    double correction = CorrectionTerm_fft(pt1,pt2, ya, phi, tmpz);
-
-    ///DEBUG
-    for(double p=M_PI/10; p<2.0*M_PI; p+=M_PI/10)
+    /*CalculateCorrection_fft(ya, tmpz);
+    for (double tphi=M_PI/10.0; tphi<2.0*M_PI-M_PI/10.0; tphi+=0.1)
     {
-        #pragma omp critical
-        cout << p << " " << CorrectionTerm_fft(pt1,pt2, ya, p, tmpz) << endl;
+        double correction = CorrectionTerm_fft(pt1,pt2, ya, phi, tmpz);
+        cout << phi << " " << correction << endl;
     }
-    cerr << "# relcorrection = " << -correction/result << endl;
-    cerr << "# Exiting at " << LINEINFO << endl;
     exit(1);
-    result-=correction;
-    
+    */
     
     double tmpxh = xh(pt1, pt2, y1, y2, sqrts);
 
@@ -146,7 +147,7 @@ double CrossSection2::dSigma(double pt1, double pt2, double y1, double y2, doubl
     // => d\simga / d^2kd^2 q dy_1 dy_2
     // and integration over x (takes away the delta function)
     // meaning (1-z)*k^+
-    // However k^+ has already cancelled out and is also cancelled out in
+    // However k^+ has already cancelled and is also cancelled in
     // CorrectionTerm()
     result *= (1.0-tmpz);
 
@@ -429,6 +430,8 @@ CrossSection2::CrossSection2(AmplitudeLib* N_, PDF* pdf_,FragmentationFunction* 
     gcachek=-1;
     fcacheval=-1; fcachek=-1;
     transform=NULL;
+    mcintpoints=1e7;
+    gsl_rng_env_setup();
 }
 
 
