@@ -18,13 +18,13 @@
 #include <string>
 #include <sstream>
 
-const double R_RANGE = 7;
+const double R_RANGE = 10;
 
-const bool READFILE = false; // Read integrand from a file
+const bool READFILE = true; // Read integrand from a file
 
 void CrossSection2::CalculateCorrection_fft(double ya, double z)
 {
-    Nd = 20;   // Number of datapoints for each dimension
+    Nd = 32;   // Number of datapoints for each dimension
                             // must satisfy Nd%2==0
     const double maxr = R_RANGE;   // Maximum length of vector component
     delta = maxr/Nd*2.0;
@@ -72,6 +72,7 @@ void CrossSection2::CalculateCorrection_fft(double ya, double z)
         //int v1i_x=4; int v1i_y=-10+Nd;
 
         ///DEBUG
+        /*
         {
         int vyind=3; int vxind=48;
         
@@ -104,7 +105,7 @@ void CrossSection2::CalculateCorrection_fft(double ya, double z)
         }
         } }
         exit(1);
-        
+        */
     }   // end if datafile==true
     
     else
@@ -232,7 +233,7 @@ void CrossSection2::CalculateCorrection_fft(double ya, double z)
 
 }
 double CrossSection2::CorrectionTerm_fft(double pt1, double pt2,
-    double ya, double phi, double z)
+    double ya, double phi)
 {
     // Coordinates: 0=r_x, 1=r_y, 2=v1_x, 3=v1_y
     // k (=gluon, pt1) couples with v and r couples with \Delta = k+q = pt1+pt2
@@ -290,6 +291,7 @@ struct Inthelper_v2int
     double v2_r;
     double theta;
     double z;
+    double s_r_p_zv1;
     AmplitudeLib* N;
 };
 const int VINTINTERVALS = 100;
@@ -308,6 +310,7 @@ double CrossSection2::V2int(double rx, double ry, double v1x, double v1y, double
     helper.s_r = N->S(helper.r, y);
     helper.r_p_v1 = std::sqrt( SQR(rx+v1x) + SQR(ry+v1y) );
     helper.s_r_p_v1 = N->S(helper.r_p_v1, y);
+    helper.s_r_p_zv1 = N->S( std::sqrt( SQR(rx+z*v1x) + SQR(ry+z*v1y)),y);
 
     ///DEBUG
     /*
@@ -315,8 +318,8 @@ double CrossSection2::V2int(double rx, double ry, double v1x, double v1y, double
     {
         for (double theta=0; theta < 2.0*M_PI; theta+=0.03)
         { 
-        helper.rx=-3; helper.ry=4;
-        helper.v1x=3.5; helper.v1y=-2.3; helper.r = std::sqrt(SQR(helper.rx) + SQR(helper.ry) );
+        helper.rx=-4; helper.ry=-1;
+        helper.v1x=3.5; helper.v1y=-2; helper.r = std::sqrt(SQR(helper.rx) + SQR(helper.ry) );
         helper.v2_r = v2; helper.s_r = N->S(helper.r, y);
         cout <<  v2 << "  " << theta << " " << Inthelperf_v2thetaint(theta, &helper)*v2 << endl;
         //cout << v2 << " " << Inthelperf_v2rint(std::log(v2), &helper)/v2 << endl;
@@ -334,7 +337,7 @@ double CrossSection2::V2int(double rx, double ry, double v1x, double v1y, double
     double result,abserr;
 
     double min = std::log(1e-5);
-    double max = std::log(1e8);
+    double max = std::log(3.0*R_RANGE);
 
 
     int status = gsl_integration_qag(&f, min, max,
@@ -456,13 +459,14 @@ double Inthelperf_v2thetaint(double theta, void* p)
 	// 3point
 	result -= s_v2_p_05v1* N->S(
 		std::sqrt( SQR(v2x+0.5*v1x+rx-par->z*(v2x-0.5*v1x)) 
-			+ 	   SQR(v2y+0.5*v1y+ry-par->z*(v1y-0.*v1y)) ), y );
+			+ 	   SQR(v2y+0.5*v1y+ry-par->z*(v2y-0.5*v1y)) ), y );
 	result -= s_v2_m_05v1* N->S(
 		std::sqrt( SQR(v2x-0.5*v1x-rx-par->z*(v2x+0.5*v1x))
 			+      SQR(v2y-0.5*v1y-ry-par->z*(v2y+0.5*v1y))), y );
 	
 	// 2 point
-	result += N->S( std::sqrt( SQR(rx+par->z*v1x) + SQR(ry+par->z*v1y)),y);
+	//result += N->S( std::sqrt( SQR(rx+par->z*v1x) + SQR(ry+par->z*v1y)),y);
+    result += par->s_r_p_zv1;
 
     // wave function product
 

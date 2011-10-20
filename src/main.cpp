@@ -131,6 +131,8 @@ int main(int argc, char* argv[])
     double ya=std::log(0.01 / cross_section.xa(pt1,pt2,y1,y2,sqrts));
     cout << "# pt1=" << pt1 <<", pt2=" << pt2 <<", y1=" << y1 <<", y2=" << y2 <<
     " y_A=" << ya << endl;
+    cout << "# x1=" << pt1*std::exp(y1)/sqrts << ", x2=" << pt2*std::exp(y2)/sqrts
+        << " sqrts=" << sqrts << endl;
     cout << "# z=" << cross_section.z(pt1,pt2,y1,y2) <<", 1-z=" << cross_section.z(pt2,pt1,y2,y1)
     << " xa=" << cross_section.xa(pt1,pt2,y1,y2,sqrts)
     << " xh=" << cross_section.xh(pt1,pt2,y1,y2,sqrts) << endl;
@@ -144,22 +146,33 @@ int main(int argc, char* argv[])
     double normalization = 1;//cross_section.Sigma(pt1, pt2, y1, y2, sqrts);
     //cout << "# Normalization totxs " << normalization << endl;
     //cout << "# Theta=2.5 " << cross_section.dSigma(pt1,pt2,y1,y2,2.5,sqrts) << endl;
-    int points=25;
-    #pragma omp parallel for
+    int points=50;
+    bool fftw=false;
+
+    // FFTW
+    if (fftw)
+        cross_section.CalculateCorrection_fft(ya, cross_section.z(pt1,pt2,y1,y2));
+        
+    //#pragma omp parallel for
     for (int i=0; i<points; i++)
     {
+        //double theta = 0.2*2.0*M_PI*(i+1.0);
         double theta = M_PI/10.0 + (2.0*M_PI-M_PI/10.0)*i/((double)points-1.0);
-        double result = cross_section.dSigma(pt1,pt2,y1,y2,theta,sqrts);
+        double result = cross_section.dSigma(pt1,pt2,y1,y2,theta,sqrts,!fftw);
         if (result<-0.5)
         {
             #pragma omp critical
             cout <<"# " << theta <<" MC integral failed " << endl;
             continue;
         }
-             //+cross_section.dSigma(pt2,pt1,y2,y1,theta,sqrts);
-        //double result = cross_section.NPair(theta, sqrts);
+        
         #pragma omp critical
-        cout << theta << " " << result/normalization << endl;
+        {
+            cout << theta << " " << result/normalization << " "
+                //<< cross_section.CorrectionTerm_fft(pt1,pt2, ya, theta)
+                << endl;
+        }
+        
     }
 
 

@@ -24,7 +24,7 @@ class CrossSection2
             bool pdf=true);
         double CorrectionTerm(double pt1, double pt2, double ya, double phi, double z);
         double CorrectionTerm_nomc(double pt1, double pt2, double ya, double phi);
-        double CorrectionTerm_fft(double pt1, double pt2, double ya, double phi, double z);
+        double CorrectionTerm_fft(double pt1, double pt2, double ya, double phi);
         void CalculateCorrection_fft(double ya, double z);
         double Sigma(double pt1, double pt2, double y1, double y2, double sqrts);
 

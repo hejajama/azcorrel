@@ -118,30 +118,27 @@ double CrossSection2::dSigma(double pt1, double pt2, double y1, double y2, doubl
     //cout << "# phi=" << phi << ", result w.o. corrections = " << result << endl;
 
     // CorrectionTerm returns -1 if the integral doesn't converge
-    
+    /*
     double correction = CorrectionTerm(pt1,pt2,ya,phi,tmpz);
     if (std::abs(correction+1.0)<0.001) return -1;
    	result +=correction;
-    
+    */
     //#pragma omp critical
     //cout <<"# phi=" << phi <<" MC result " << result << endl;
     
-    
-    //FFT
-    /*CalculateCorrection_fft(ya, tmpz);
-    for (double tphi=M_PI/10.0; tphi<2.0*M_PI-M_PI/10.0; tphi+=0.1)
+
+    if (!multiply_pdf)
     {
-        double correction = CorrectionTerm_fft(pt1,pt2, ya, phi, tmpz);
-        cout << phi << " " << correction << endl;
+        // return cyrilles k^+|foo|^2F() with correction term, not multiplied
+        // by any constants, so ~d\sigma/d^3kd^3q
+        // Cyrille's M w.o. (2\pi)^-2
+        return result;
     }
-    exit(1);
-    */
     
     double tmpxh = xh(pt1, pt2, y1, y2, sqrts);
 
-    if (multiply_pdf)
-        result *= 2.0*(pdf->xq(tmpxh, delta, UVAL) + pdf->xq(tmpxh, delta, DVAL));
-        // factor 2 from isospin symmetry: xf_u,p = xf_d,n
+    result *= 2.0*(pdf->xq(tmpxh, delta, UVAL) + pdf->xq(tmpxh, delta, DVAL));
+    // factor 2 from isospin symmetry: xf_u,p = xf_d,n
 
     // Multiply terms which follow from change of variable d\sigma/d^3kd^q
     // => d\simga / d^2kd^2 q dy_1 dy_2
