@@ -18,13 +18,16 @@
 #include <string>
 #include <sstream>
 
-const double R_RANGE = 10;
+const double R_RANGE = 14;
 
-const bool READFILE = true; // Read integrand from a file
+const bool READFILE = false; // Read integrand from a file
+
+bool fftw_cyrille=true;
+bool fftw_correction=false;
 
 void CrossSection2::CalculateCorrection_fft(double ya, double z)
 {
-    Nd = 32;   // Number of datapoints for each dimension
+    Nd = 50;   // Number of datapoints for each dimension
                             // must satisfy Nd%2==0
     const double maxr = R_RANGE;   // Maximum length of vector component
     delta = maxr/Nd*2.0;
@@ -61,6 +64,8 @@ void CrossSection2::CalculateCorrection_fft(double ya, double z)
             getline( liness, id, ' ');
             getline( liness, val, ' ');
             int i=StrToInt(id);; double v=StrToReal(val);
+            if (std::abs(data[i])>1e-10 and std::abs(data[i].real()/v-1.0) > 0.001)
+                cerr <<"trying to set data[" << i <<"] to " << v << " but it is " << data[i] << endl;
             data[i] = v;
         }
         file.close();
@@ -114,8 +119,9 @@ void CrossSection2::CalculateCorrection_fft(double ya, double z)
         int done=0;
         cout <<"#Nd=" << Nd << " delta=" << delta << " max_component = " << maxr << endl;
         cout <<"# index   result   rx  ry  vx  vy " << endl;
+        cout <<"# Marquet:" << fftw_cyrille << " correction: " << fftw_correction << endl;
         
-        #pragma omp parallel for schedule(dynamic,50)
+        #pragma omp parallel for //schedule(dynamic,50)
         for (int index=0; index<Nd*Nd*Nd*Nd; index++)
         {
             int vyind = index%Nd;
@@ -158,20 +164,31 @@ void CrossSection2::CalculateCorrection_fft(double ya, double z)
                         
                         int rxi_xm = rxind;
                         int vxi_xm = vxind;
-                        if (rxind != 0) rxi_xm = Nd-rxind;
-                        if (vxind != 0) vxi_xm = Nd-vxind;
+                        if (rxind != 0 and vxind != 0 and rxind != Nd/2 and ryind != Nd/2)
+                        {
+                            rxi_xm = Nd-rxind;
+                            vxi_xm = Nd-vxind;
+                        }
                         int index2 = vyind + Nd*(vxi_xm + Nd*(ryind + Nd*rxi_xm) );
 
                         // Mirror y
                         int ryi_ym = ryind;
                         int vyi_ym = vyind;
-                        if (ryind != 0) ryi_ym = Nd-ryind;
-                        if (vyind != 0) vyi_ym = Nd-vyind;
+                        if (ryind != 0 and vyind != 0 and ryind != Nd/2 and vyind != Nd/2)
+                        {
+                            ryi_ym = Nd-ryind;
+                            vyi_ym = Nd-vyind;
+                        }
 
                         int index3 = vyi_ym + Nd*(vxind + Nd*(ryi_ym + Nd*rxind) );
 
                         // Mirror both
-                        int index4 = vyi_ym + Nd*(vxi_xm + Nd*(ryi_ym + Nd*rxi_xm) );
+                        int index4=index;
+                        if (index3 != index and index2 != index)
+                        {
+                            index4 = vyi_ym + Nd*(vxi_xm + Nd*(ryi_ym + Nd*rxi_xm) );
+                        }
+
                         
                         if (data[index].real()>-99900 and data[index2].real()>-99900
                             and data[index3].real()>-99900 and data[index4].real()>-99900)
@@ -180,7 +197,6 @@ void CrossSection2::CalculateCorrection_fft(double ya, double z)
                         }
 
                         double result = V2int(rx, ry, vx, vy, ya, z);
-
                         
                         
                         #pragma omp critical
@@ -202,12 +218,15 @@ void CrossSection2::CalculateCorrection_fft(double ya, double z)
                                
                                 cout << index << std::setprecision(6) << " " << data[index].real() <<
                                 " " << rx << " " << ry << " " << vx << " " << vy << endl;
-                                cout << index2 << std::setprecision(6)<< " " << data[index].real() << " " << -rx << " "
-                                 << ry << " " << -vx << " " << vy << endl;
+                                if (index2 != index)
+                                    cout << index2 << std::setprecision(6)<< " " << data[index].real() << " " << -rx << " "
+                                    <<  ry << " " << -vx << " " << vy << endl;
+                                if (index3 != index)
                                 cout << index3 << std::setprecision(6)<< " " << data[index].real() <<
                                 " " << rx << " " << -ry << " " << vx << " " << -vy << endl;
-                                cout << index4 << std::setprecision(6)<< " " << data[index].real() <<
-                                " " << -rx << " " << -ry << " " << -vx << " " << -vy << endl;
+                                if (index4 != index)
+                                    cout << index4 << std::setprecision(6)<< " " << data[index].real() <<
+                                    " " << -rx << " " << -ry << " " << -vx << " " << -vy << endl;
                                 
                             }
                         } // end omp critical
@@ -294,8 +313,8 @@ struct Inthelper_v2int
     double s_r_p_zv1;
     AmplitudeLib* N;
 };
-const int VINTINTERVALS = 100;
-const double VINTACCURACY = 0.01;
+const int VINTINTERVALS = 20;
+const double VINTACCURACY = 0.04;
 double Inthelperf_v2thetaint(double theta, void* p);
 double Inthelperf_v2rint(double lnv2r, void* p);
 
@@ -337,11 +356,11 @@ double CrossSection2::V2int(double rx, double ry, double v1x, double v1y, double
     double result,abserr;
 
     double min = std::log(1e-5);
-    double max = std::log(3.0*R_RANGE);
+    double max = std::log(8.0*R_RANGE);
 
 
     int status = gsl_integration_qag(&f, min, max,
-            0, VINTACCURACY, VINTINTERVALS, GSL_INTEG_GAUSS41, workspace,
+            0, VINTACCURACY, VINTINTERVALS, GSL_INTEG_GAUSS31, workspace,
             &result, &abserr);
     gsl_integration_workspace_free(workspace);
     result *= 8.0*SQR(M_PI)*SQR(M_Q)*SQR(z);
@@ -370,7 +389,7 @@ double Inthelperf_v2rint(double lnv2, void* p)
     double max = 2.0*M_PI;
 
     int status = gsl_integration_qag(&f, min, max,
-            0, VINTACCURACY, VINTINTERVALS, GSL_INTEG_GAUSS51, workspace,
+            0, VINTACCURACY, VINTINTERVALS, GSL_INTEG_GAUSS31, workspace,
             &result, &abserr);
     gsl_integration_workspace_free(workspace);
 
@@ -433,40 +452,44 @@ double Inthelperf_v2thetaint(double theta, void* p)
     
     double denom2 = denom1; // optimize, same as before
 
-    double result;
+    double result=0;
     
     // 4-point function
-    result = s_r_p_v1*s_v2_p_05v1*s_v2_m_05v1;
-    /*
+    if (fftw_cyrille)
+        result = s_r_p_v1*s_v2_p_05v1*s_v2_m_05v1;
+    
 	double tmp_4point; 
+    if (fftw_correction)
+    {
+        // F/F
+        // if (rsqr < SQR(par->N->MinR())) tmp_4point=1;
+        if (nom2 <= 0 or denom2 <= 0 or
+                std::abs(nom2/denom2-1.0) < 1e-15 or
+                nom1 <= 0)
+            tmp_4point=0;
+        else
+            tmp_4point = std::log(nom1/denom1) / std::log(nom2/denom2);
+            
+        tmp_4point *= s_r_p_v1*( s_v2_p_05v1*s_v2_m_05v1 - s_r*s_r_p_v1 );
+            //N->S(r_p_v1, y) *( N->S(v2_p_05v1, y) * N->S(v2_m_05v1, y)
+            // - N->S(r, y)*N->S(r_p_v1, y) );
 
-    // F/F
-    // if (rsqr < SQR(par->N->MinR())) tmp_4point=1;
-    if (nom2 <= 0 or denom2 <= 0 or
-            std::abs(nom2/denom2-1.0) < 1e-15 or
-            nom1 <= 0)
-        tmp_4point=0;
-    else
-        tmp_4point = std::log(nom1/denom1) / std::log(nom2/denom2);
-
-
-    tmp_4point *= s_r_p_v1*( s_v2_p_05v1*s_v2_m_05v1 - s_r*s_r_p_v1 );
-        //N->S(r_p_v1, y) *( N->S(v2_p_05v1, y) * N->S(v2_m_05v1, y)
-        // - N->S(r, y)*N->S(r_p_v1, y) );
-
-	result -= tmp_4point;
-	*/
+        result -= tmp_4point;
+    }
 	// 3point
-	result -= s_v2_p_05v1* N->S(
-		std::sqrt( SQR(v2x+0.5*v1x+rx-par->z*(v2x-0.5*v1x)) 
-			+ 	   SQR(v2y+0.5*v1y+ry-par->z*(v2y-0.5*v1y)) ), y );
-	result -= s_v2_m_05v1* N->S(
-		std::sqrt( SQR(v2x-0.5*v1x-rx-par->z*(v2x+0.5*v1x))
-			+      SQR(v2y-0.5*v1y-ry-par->z*(v2y+0.5*v1y))), y );
-	
-	// 2 point
-	//result += N->S( std::sqrt( SQR(rx+par->z*v1x) + SQR(ry+par->z*v1y)),y);
-    result += par->s_r_p_zv1;
+    if (fftw_cyrille)
+    {
+        result -= s_v2_p_05v1* N->S(
+            std::sqrt( SQR(v2x+0.5*v1x+rx-par->z*(v2x-0.5*v1x)) 
+                + 	   SQR(v2y+0.5*v1y+ry-par->z*(v2y-0.5*v1y)) ), y );
+        result -= s_v2_m_05v1* N->S(
+            std::sqrt( SQR(v2x-0.5*v1x-rx-par->z*(v2x+0.5*v1x))
+                +      SQR(v2y-0.5*v1y-ry-par->z*(v2y+0.5*v1y))), y );
+        
+        // 2 point
+        //result += N->S( std::sqrt( SQR(rx+par->z*v1x) + SQR(ry+par->z*v1y)),y);
+        result += par->s_r_p_zv1;
+    }
 
     // wave function product
 
@@ -487,7 +510,7 @@ double Inthelperf_v2thetaint(double theta, void* p)
         / ( SQR(v2_m_05v1) * SQR(v2_p_05v1) );
     */
 
-    
+    /*
     if (isnan(result))
     {
         cerr << "Result is NaN at " << LINEINFO << endl;
@@ -497,7 +520,7 @@ double Inthelperf_v2thetaint(double theta, void* p)
         cerr << result << " at " << LINEINFO << ", v2m05v1 " << v2_m_05v1 <<
          " " << " v2p05v1 " << v2_p_05v1 << " r " << std::sqrt(rsqr)
          << " v2r " << par->v2_r << " theta " << theta <<  endl;
-    
+    */
     
     return result;
 

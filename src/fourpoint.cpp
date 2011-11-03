@@ -174,9 +174,12 @@ double CrossSection2::CorrectionTerm(double pt1, double pt2, double ya, double p
                 if (i>5)
                 {
                     #pragma omp critical
-                    cerr <<"# !!!!!!!!!!Vegas integral at phi=" << phi
-                        <<", z=" << z <<" doesn't converge! "
-                        << LINEINFO << endl;
+                    {
+                        cerr <<"# !!!!!!!!!!Vegas integral at phi=" << phi
+                            <<", z=" << z <<" doesn't converge! "
+                            << " iterations took " << (std::time(NULL)-start)/60.0/60.0
+                            <<" hours " << LINEINFO << endl;
+                    }
                     return -1;
                 }
             }

@@ -30,7 +30,7 @@ double CrossSection2::dSigma_lo(double pt1, double pt2, double y1, double y2, do
     double tmpxa = xa(pt1, pt2, y1, y2, sqrts);
 
     double result = std::pow(1.0-tmpz, 3.0)*(1.0+SQR(1.0-tmpz));
-    double qs = 1.0/N->SaturationScale(std::log(0.01/tmpxa), 0.5);
+    double qs = 1.0/N->SaturationScale(std::log(N->X0()/tmpxa), 0.22);
     result *= SQR(qs);
 
     double delta = Delta(pt1, pt2, theta);
@@ -65,7 +65,7 @@ double CrossSection2::dSigma(double pt1, double pt2, double y1, double y2, doubl
     double result=0;
     double tmpz = z(pt1, pt2, y1, y2);
     double tmpxa = xa(pt1, pt2, y1, y2, sqrts);
-    double ya = std::log(0.01/tmpxa);
+    double ya = std::log(N->X0()/tmpxa);
     //N->InitializeInterpolation(ya);
     double delta = Delta(pt1,pt2,phi);
     //cout << "# phi " << phi << " delta " << delta << endl;
@@ -88,9 +88,8 @@ double CrossSection2::dSigma(double pt1, double pt2, double y1, double y2, doubl
         }
     }
     */
-    
-    g = G(pt2, tmpxa, tmpz); f=N->S_k(delta, ya)/SQR(2.0*M_PI);
-    
+    g = G(pt2, tmpxa, tmpz);
+    f=N->S_k(delta, ya)/SQR(2.0*M_PI);
 
     // (k - z\delta)^2 = (1-z)^2 pt1^2 + z^2 pt2^2 - 2*z*(1-z)*pt1*pt2*cos \phi
     double kzdeltasqr = SQR(1.0-tmpz)*SQR(pt1) + SQR(tmpz*pt2) - 2.0*tmpz*(1.0-tmpz)
@@ -118,20 +117,20 @@ double CrossSection2::dSigma(double pt1, double pt2, double y1, double y2, doubl
     //cout << "# phi=" << phi << ", result w.o. corrections = " << result << endl;
 
     // CorrectionTerm returns -1 if the integral doesn't converge
-    /*
     double correction = CorrectionTerm(pt1,pt2,ya,phi,tmpz);
     if (std::abs(correction+1.0)<0.001) return -1;
    	result +=correction;
-    */
-    //#pragma omp critical
-    //cout <<"# phi=" << phi <<" MC result " << result << endl;
     
+    /*result = CorrectionTerm_fft(pt1, pt2, ya, phi);
+    #pragma omp critical
+    cout <<"# phi=" << phi <<" MC result " << result << endl;
+    */
 
     if (!multiply_pdf)
     {
-        // return cyrilles k^+|foo|^2F() with correction term, not multiplied
+        // return Marquet's k^+|foo|^2F() with correction term, not multiplied
         // by any constants, so ~d\sigma/d^3kd^3q
-        // Cyrille's M w.o. (2\pi)^-2
+        // Marquet's M w.o. (2\pi)^-2
         return result;
     }
     
@@ -139,6 +138,7 @@ double CrossSection2::dSigma(double pt1, double pt2, double y1, double y2, doubl
 
     result *= 2.0*(pdf->xq(tmpxh, delta, UVAL) + pdf->xq(tmpxh, delta, DVAL));
     // factor 2 from isospin symmetry: xf_u,p = xf_d,n
+
 
     // Multiply terms which follow from change of variable d\sigma/d^3kd^q
     // => d\simga / d^2kd^2 q dy_1 dy_2
@@ -148,7 +148,7 @@ double CrossSection2::dSigma(double pt1, double pt2, double y1, double y2, doubl
     // CorrectionTerm()
     result *= (1.0-tmpz);
 
-    result *= pt1*pt2;  // d^2 pt_1 d^2 pt2 => dpt_1 dpt_2
+    //result *= pt1*pt2;  // d^2 pt_1 d^2 pt2 => dpt_1 dpt_2
 
     // Overall constants
     //result *= ALPHAS*Cf/(4.0*SQR(M_PI));
@@ -174,7 +174,7 @@ double Inthelperf_sigma(double theta, void* p)
 
     if (isnan(res1) or isnan(res2) or isinf(res1) or isinf(res2))
     {
-        cerr << "nan/inf at theta=" << theta << endl;
+        cerr << "nan/inf at theta=" << theta << ". " << LINEINFO << endl;
     }
     return (res1+res2);
 }
@@ -342,7 +342,7 @@ double CrossSection2::G(double kt, double x, double z)
         return gcacheval;
     
     G_helper helper;
-    helper.y = std::log(0.01/x);
+    helper.y = std::log(N->X0()/x);
     helper.N=N; helper.kt=kt; helper.z=z;
 
     set_fpu_state();
@@ -389,7 +389,7 @@ double CrossSection2::H(double kt, double x, double z)
     //TODO: Cache?
     if (M_Q < 1e-5) return 0;
     G_helper helper;
-    helper.y = std::log(0.01/x);
+    helper.y = std::log(N->X0()/x);
     helper.N=N; helper.kt=kt; helper.z=z;
 
     set_fpu_state();

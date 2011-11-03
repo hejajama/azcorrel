@@ -35,6 +35,7 @@ class CrossSection2
         double xh(double pt1, double pt2, double y1, double y2, double sqrts);
         double Delta(double pt1, double pt2, double theta);
 
+
         // \int dr r*S(r)*K_1(mzr)*J1(kr)
         double G(double kt, double x, double z=0);
         // \int dr r*S(r)*K_0(mzr)*J0(kr)
@@ -62,6 +63,6 @@ class CrossSection2
         size_t mcintpoints;
         
 };
-const double M_Q =1; //0.14;  // GeV
+const double M_Q =1.0; //0.14;  // GeV
 
 #endif

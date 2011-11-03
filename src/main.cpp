@@ -26,10 +26,13 @@ int main(int argc, char* argv[])
         cout << "-pt1 pt: rapidity of particle 1" << endl;
         cout << "-pt2 pt: rapidit yof particle 2" << endl;
         cout << "-sqrts sqrts: \\sqrts(s)" << endl;
+        cout << "-phi phi: calculate only one angle" << endl;
         cout << "-pdfmode [MRST, CTEQ]: choose pdf" << endl;
         cout << "-pdf Q: plot PDF as a function of x" << endl;
+        cout << "-nopdf: don't multiply by pdf, prints ~d\\sigma/d^3kd^3q" << endl;
         cout << "-amplitude filename: where to load amplitude data" << endl;
         cout << "-mcintpoints points" << endl;
+        cout << "-data amplitudedatafile" << endl;
         return 0;
     }
 
@@ -44,6 +47,8 @@ int main(int argc, char* argv[])
 
     double y1=3.5; double y2=2; double pt1=5; double pt2=3; double sqrts=200;
     double Q=-1;
+    double phi=-1;
+    bool multiply_pdf=true;
     PDF *pdf=0;
     size_t mcintpoints=1e7;
     
@@ -59,10 +64,16 @@ int main(int argc, char* argv[])
             pt2 = StrToReal(argv[i+1]);
         else if (string(argv[i])=="-sqrts")
             sqrts = StrToReal(argv[i+1]);
+        else if (string(argv[i])=="-phi")
+            phi = StrToReal(argv[i+1]);
         else if (string(argv[i])=="-amplitude")
             filename = argv[i+1];
         else if (string(argv[i])=="-pdf")
             Q=StrToReal(argv[i+1]);
+        else if (string(argv[i])=="-nopdf")
+            multiply_pdf=false;
+        else if (string(argv[i])=="-data")
+            filename = argv[i+1];
         else if (string(argv[i])=="-pdfmode")
         {
             if (string(argv[i+1])=="MRST")
@@ -119,16 +130,10 @@ int main(int argc, char* argv[])
     }
     AmplitudeLib amplitude(filename);
     KKP fragmentation;
-/*
-    for (double x=1e-4; x<1; x*=1.1)
-    {
-        cout << x << " " << fragmentation.Evaluate(G, H, x, 80.2) << endl;
-    }
-    delete pdf; return 0;
-  */  
+
     CrossSection2 cross_section(&amplitude, pdf, &fragmentation);
     cross_section.SetMCIntPoints(mcintpoints);
-    double ya=std::log(0.01 / cross_section.xa(pt1,pt2,y1,y2,sqrts));
+    double ya=std::log(amplitude.X0() / cross_section.xa(pt1,pt2,y1,y2,sqrts));
     cout << "# pt1=" << pt1 <<", pt2=" << pt2 <<", y1=" << y1 <<", y2=" << y2 <<
     " y_A=" << ya << endl;
     cout << "# x1=" << pt1*std::exp(y1)/sqrts << ", x2=" << pt2*std::exp(y2)/sqrts
@@ -136,33 +141,47 @@ int main(int argc, char* argv[])
     cout << "# z=" << cross_section.z(pt1,pt2,y1,y2) <<", 1-z=" << cross_section.z(pt2,pt1,y2,y1)
     << " xa=" << cross_section.xa(pt1,pt2,y1,y2,sqrts)
     << " xh=" << cross_section.xh(pt1,pt2,y1,y2,sqrts) << endl;
-    cout << "# Q_s = " << 1.0/amplitude.SaturationScale(
-        std::log(0.01/cross_section.xa(pt1,pt2,y1,y2,sqrts)), 0.5 ) << " GeV " << endl;
+    cout << "# Q_s = " << 1.0/amplitude.SaturationScale(ya, 0.22) << " GeV " << endl;
     cout << "# MC Integration points " << mcintpoints << endl;
 
 
-    amplitude.InitializeInterpolation(
-        std::log(0.01 / cross_section.xa(pt1,pt2,y1,y2,sqrts)) );
+    amplitude.InitializeInterpolation(ya);
     double normalization = 1;//cross_section.Sigma(pt1, pt2, y1, y2, sqrts);
     //cout << "# Normalization totxs " << normalization << endl;
     //cout << "# Theta=2.5 " << cross_section.dSigma(pt1,pt2,y1,y2,2.5,sqrts) << endl;
-    int points=50;
+    int points=10;
+    if (phi>-0.5) points=1;    // calculate only given angle
+    double maxphi=M_PI;
     bool fftw=false;
 
     // FFTW
     if (fftw)
         cross_section.CalculateCorrection_fft(ya, cross_section.z(pt1,pt2,y1,y2));
-        
-    //#pragma omp parallel for
+
+    if (fftw and multiply_pdf)
+        cerr <<"Can't calculate FFT and multiply by PDF!" << endl;
+    
+
+    int ready=0;
+    #pragma omp parallel for
     for (int i=0; i<points; i++)
     {
+        #pragma omp critical
+        {
+            ready++;
+            cout << "# Starting index " << ready << "/" << points << endl;
+        }
         //double theta = 0.2*2.0*M_PI*(i+1.0);
-        double theta = M_PI/10.0 + (2.0*M_PI-M_PI/10.0)*i/((double)points-1.0);
-        double result = cross_section.dSigma(pt1,pt2,y1,y2,theta,sqrts,!fftw);
+        double theta = M_PI/10.0 + (maxphi-M_PI/10.0)*i/((double)points-1.0);
+        if (phi>-0.5) theta=phi;    // calculate given value
+        double result=0;
+        if (!fftw)
+            result = cross_section.dSigma(pt1,pt2,y1,y2,theta,sqrts,multiply_pdf);
+        else
+            result = cross_section.CorrectionTerm_fft(pt1, pt2, ya, theta);
         if (result<-0.5)
         {
-            #pragma omp critical
-            cout <<"# " << theta <<" MC integral failed " << endl;
+            //cout <<"# " << theta <<" MC integral failed " << endl;
             continue;
         }
         
