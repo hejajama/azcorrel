@@ -5,12 +5,16 @@
  */
 
 #include "xs.hpp"
+#include <tools/interpolation2d.hpp>
 #include <gsl/gsl_integration.h>
 #include <gsl/gsl_monte_miser.h>
 #include <gsl/gsl_monte_plain.h>
 #include <gsl/gsl_monte_vegas.h>
 #include <gsl/gsl_sf_bessel.h>
 #include <gsl/gsl_monte.h>
+#include <fstream>
+#include <string>
+#include <sstream>
 
 
 extern "C"
@@ -68,7 +72,7 @@ double CrossSection2::dSigma(double pt1, double pt2, double y1, double y2, doubl
     double ya = std::log(N->X0()/tmpxa);
     //N->InitializeInterpolation(ya);
     double delta = Delta(pt1,pt2,phi);
-    //cout << "# phi " << phi << " delta " << delta << endl;
+
     double g=0,f=0;
     /*
     #pragma omp parallel sections
@@ -94,8 +98,10 @@ double CrossSection2::dSigma(double pt1, double pt2, double y1, double y2, doubl
     // (k - z\delta)^2 = (1-z)^2 pt1^2 + z^2 pt2^2 - 2*z*(1-z)*pt1*pt2*cos \phi
     double kzdeltasqr = SQR(1.0-tmpz)*SQR(pt1) + SQR(tmpz*pt2) - 2.0*tmpz*(1.0-tmpz)
                                 * pt1*pt2*std::cos(phi);
+
+    cout << "# phi " << phi << " delta " << delta << "kzdeltasqr " << kzdeltasqr <<   endl;
     // m=0
-    if (M_Q < 1e-5)
+    if (M_Q() < 1e-5)
     {
         result = SQR(g) + 1.0/kzdeltasqr + 2.0*g*( (1.0-tmpz)*pt1*pt2*std::cos(phi)
                     - tmpz*SQR(pt2) ) / ( pt2*kzdeltasqr );
@@ -103,11 +109,11 @@ double CrossSection2::dSigma(double pt1, double pt2, double y1, double y2, doubl
     }
     else // m!= 0
         result = 2.0*(1.0+SQR(1.0-tmpz))*(
-            SQR(g) + kzdeltasqr/SQR(kzdeltasqr + SQR(M_Q*tmpz))
+            SQR(g) + kzdeltasqr/SQR(kzdeltasqr + SQR(M_Q()*tmpz))
                 + 2.0*g*( (1.0-tmpz)*pt1*pt2*std::cos(phi) - tmpz*SQR(pt2) )
-                    / (pt2* ( kzdeltasqr + SQR(M_Q*tmpz) ) )
+                    / (pt2* ( kzdeltasqr + SQR(M_Q()*tmpz) ) )
             )
-            + 2.0*SQR( H(pt2, tmpxa, tmpz) - M_Q*SQR(tmpz)/(kzdeltasqr + SQR(M_Q*tmpz)) );
+            + 2.0*SQR( H(pt2, tmpxa, tmpz) - M_Q()*SQR(tmpz)/(kzdeltasqr + SQR(M_Q()*tmpz)) );
     
     
     
@@ -117,10 +123,12 @@ double CrossSection2::dSigma(double pt1, double pt2, double y1, double y2, doubl
     //cout << "# phi=" << phi << ", result w.o. corrections = " << result << endl;
 
     // CorrectionTerm returns -1 if the integral doesn't converge
-    double correction = CorrectionTerm(pt1,pt2,ya,phi,tmpz);
-    if (std::abs(correction+1.0)<0.001) return -1;
-   	result +=correction;
     
+    /*double correction = CorrectionTerm(pt1,pt2,ya,phi,tmpz);
+    if (std::abs(correction+1.0)<0.001) return -1;
+   	//result +=correction;
+    result = correction;
+    */
     /*result = CorrectionTerm_fft(pt1, pt2, ya, phi);
     #pragma omp critical
     cout <<"# phi=" << phi <<" MC result " << result << endl;
@@ -146,7 +154,7 @@ double CrossSection2::dSigma(double pt1, double pt2, double y1, double y2, doubl
     // meaning (1-z)*k^+
     // However k^+ has already cancelled and is also cancelled in
     // CorrectionTerm()
-    result *= (1.0-tmpz);
+    //result *= (1.0-tmpz);
 
     //result *= pt1*pt2;  // d^2 pt_1 d^2 pt2 => dpt_1 dpt_2
 
@@ -217,115 +225,196 @@ double CrossSection2::Sigma(double pt1, double pt2, double y1, double y2, double
  * momenta. Also take into account fragmentation => integrate over z_i from x_1
  * up to 1
  */
-struct NPairHelper{
-    CrossSection2* xs;
-    AmplitudeLib* N;
-    double sqrts;
+/*
+ * Load \Delta \phi data from files pt1_#_pt2_#, interpolate in pt and phi
+ * Integrate over kinematical variables z_1,z_2 to take into account
+ * hadronization
+ */
+int CrossSection2::LoadPtData()
+{
+   // Load datafiles 
+   // Generate interpolators
+
+   ptvals.push_back(1.0);
+   ptvals.push_back(3.0); ptvals.push_back(5.0); //ptvals.push_back(7.0);
+   ptstrings.push_back("1");
+   ptstrings.push_back("3"); ptstrings.push_back("5");
+   //ptstrings.push_back("7");
+
+
+
+   int points=ptvals.size();
+   for (int pt1ind=0; pt1ind<points; pt1ind++)
+   {
+       std::vector<Interpolator*> tmpinterpolators;
+       for (int pt2ind=0; pt2ind<points; pt2ind++)
+       {
+            std::stringstream fname;
+            fname << "taulukointi/pt1_" << ptstrings[pt1ind] << "_pt2_" << ptstrings[pt2ind]
+                << "_sort";
+            cout << "# Loading file " << fname.str() << endl;
+            std::ifstream file(fname.str().c_str());
+            std::vector<double> dphi;
+            std::vector<double> xs;
+            while(!file.eof())
+            {
+                string line;
+                getline(file, line);
+                if (line.substr(0,1)=="#" or line.length()<5)
+                    continue;   // Comment
+                std::istringstream iss(line);
+                string angle,val;
+                iss >> angle; iss >> val;
+
+                dphi.push_back(StrToReal(angle));
+                xs.push_back(StrToReal(val));
+            }
+
+            file.close();
+
+            // Mirror \dphi
+            int center_index = dphi.size()-1;
+            for (int i=dphi.size()-2; i>=0; i--)
+            {
+                dphi.push_back(M_PI + (M_PI-dphi[i]) );
+                xs.push_back(xs[i]);
+            }
+
+            if (xs.size()<2) continue;
+
+            Interpolator *tmpinterp = new Interpolator(dphi, xs);
+            tmpinterp->Initialize();
+            tmpinterpolators.push_back(tmpinterp);
+
+       }
+       ptinterpolators.push_back(tmpinterpolators);
+   }
+   cout << "# Data loaded" << endl; 
+
+    return 0;
+}
+
+struct dSigma_full_helper
+{
+    double pt1,pt2;
+    Interpolator2D *pt_interpolator;
+    CrossSection2 *xs;
+    double x1,x2;
+    double z1;
     double phi;
-    double yh1,yh2;   // Rapidities of the hadrons
+    double xh;
 };
 
-double NPairHelperf(double* vec, size_t dim, void* p);
+double dSigma_full_helperf_z1(double z1, void* p);
+double dSigma_full_helperf_z2(double z2, void* p);
 
-double CrossSection2::NPair(double phi, double sqrts)
+const int PTINT_INTERVALS=3;
+
+double CrossSection2::dSigma_full(double pt1, double pt2, double y1, double y2,
+    double phi, double sqrts)
 {
-    double maxpt = 10;
-    const uint dim=7;
-    double lower[dim] = {0, 2,     1,     0, 0 ,2.4,2.4 };
-    double upper[dim] = {1, maxpt, maxpt, 1, 1 ,4,4 };
+    // Prepare 2D grid to interpolate
+    std::vector< std::vector< double > > data;   //[pt1][pt2]
+    for (int pt1ind = 0; pt1ind < ptvals.size(); pt1ind++)
+    {
+        std::vector<double> tmpvec;
+        for (int pt2ind=0; pt2ind < ptvals.size(); pt2ind++)
+        {
+            tmpvec.push_back(ptinterpolators[pt1ind][pt2ind]->Evaluate(phi));
+        }
+        data.push_back(tmpvec);
+    }
 
+    Interpolator2D interpolator(ptvals, data);
 
-    NPairHelper helper; helper.sqrts=sqrts; helper.phi=phi;
-    helper.xs=this; helper.N=N;
-    //helper.yh1=3.5; helper.yh2=2;
+    double x1 = pt1*std::exp(y1)/sqrts;
+    double x2 = pt2*std::exp(y2)/sqrts;
 
-    const gsl_rng_type *T;
-    gsl_rng *r;
+    dSigma_full_helper helper;
+    helper.pt1=pt1; helper.pt2=pt2;
+    helper.pt_interpolator = &interpolator;
+    helper.xs=this;
+    helper.x1=x1; helper.x2=x2; helper.phi=phi;
+    helper.xh = x1+x2;
 
-    gsl_rng_env_setup ();
-    gsl_monte_function montef = { &NPairHelperf, dim, &helper };   
+    gsl_function f;
+    f.function=dSigma_full_helperf_z1;
+    f.params=&helper;
 
-    size_t calls = 1000;
-    T = gsl_rng_default;
-    r = gsl_rng_alloc(T);
 
     double result,abserr;
+    gsl_integration_workspace *workspace 
+     = gsl_integration_workspace_alloc(PTINT_INTERVALS);
+    int status = gsl_integration_qag(&f, x1, 1.0,
+            0, 0.01, PTINT_INTERVALS, GSL_INTEG_GAUSS51, workspace,
+            &result, &abserr);
+    gsl_integration_workspace_free(workspace);
     
-    /*gsl_monte_miser_state *s = gsl_monte_miser_alloc (dim);
-    gsl_monte_miser_integrate(&montef, lower, upper, dim, calls, r, s,
-        &result, &abserr);
-    gsl_monte_miser_free(s);*/
-    
-    gsl_monte_plain_state *s = gsl_monte_plain_alloc (dim);
-    gsl_monte_plain_integrate(&montef, lower, upper, dim, calls, r, s,
-        &result, &abserr);
-    gsl_monte_plain_free(s);
-    
+    if (status)
+        cerr << "z1int failed at " << LINEINFO <<", result " << result
+        << " relerror " << std::abs(abserr/result) << " dphi " << phi << endl;
 
-    gsl_rng_free(r);
-
-    cout << "# phi " << phi << " result " << result << " relerror "
-     << std::abs(abserr/result) << endl;
-
+    result *= (1.0 - z(pt1, pt2, y1, y2));
     return result;
 }
 
-double NPairHelperf(double* vec, size_t dim, void* p)
+double dSigma_full_helperf_z1(double z1, void* p)
 {
-    NPairHelper* par = (NPairHelper*)p;
-    // vec[0]=x, vec[1]=p_t1, vec[2]=p_t2, vec[3]=z1,
-    // vec[4]=z2  vec[5]=y1  vec[6]=y2  (vec[5] and 6 may not be integrated over)
+    dSigma_full_helper *par = (dSigma_full_helper*)p;
+    par->z1=z1;
+    gsl_function f; f.function = dSigma_full_helperf_z2;
+    f.params = par;
 
-    // If rapidity is integrated over
-    double yh1 = vec[5];
-    double yh2 = vec[6];
+    double result,abserr;
+    gsl_integration_workspace *workspace 
+     = gsl_integration_workspace_alloc(PTINT_INTERVALS);
+    int status = gsl_integration_qag(&f, par->x2,1.0,
+            0, 0.01, PTINT_INTERVALS, GSL_INTEG_GAUSS51, workspace,
+            &result, &abserr);
+    gsl_integration_workspace_free(workspace);
     
-    //double yh1=par->yh1; double yh2=par->yh2;
+    if (status)
+        cerr << "z2int failed at " << LINEINFO <<", result " << result
+        << " relerror " << std::abs(abserr/result) << " dphi " << par->phi << endl;
+    return result;
+}
 
-    // z_1,z_2 integral
-    double minx1 = vec[3]/par->sqrts*std::exp(yh1);
-    double minx2 = vec[4]/par->sqrts*std::exp(yh2);
-    if (vec[3]<minx1) return 0;
-    if (vec[4]<minx2) return 0;
+double dSigma_full_helperf_z2(double z2, void* p)
+{    
+    dSigma_full_helper *par = (dSigma_full_helper*)p;
 
-    // x integral
-    if (vec[0] < minx1/vec[3]+minx2/vec[4]) return 0;
-    if (minx1/vec[3] + minx2/vec[4] >=1) return 0;
-
-    // p_2 integral
-    if (vec[2]>vec[1]) return 0;
-
-    // y1 and y2 for q->qg process
-    // p^+ = p_T e^y, approx. p_T constant during the fragmentation
-    // y_{i, q->qg} = ln[ p_i^+ / (z|p_i|) ]
-    // y_{i, q->qg} = y_i + ln 1/z_i
-    double y1 = yh1 + std::log(1.0/vec[3]);
-    double y2 = yh2 + std::log(1.0/vec[4]);
+    if (par->x1/par->z1 + par->x2/z2 > 1) return 0;
+    if (par->pt1/par->z1 >= 5.0 or par->pt2/z2 >= 5.0) return 0;
 
     double result=0;
+    double qscale = std::max(par->pt1, par->pt2);
+    result = par->z1 * par->pt_interpolator->Evaluate(par->pt1/par->z1, par->pt2/z2)
+        *
+        ( par->xs->Pdf()->xq(par->xh, qscale, U)
+            * par->xs->FragFun()->Evaluate(U, PI0, par->z1, qscale)
+            * par->xs->FragFun()->Evaluate(G, PI0, z2, qscale)
+          + par->xs->FragFun()->Evaluate(D, PI0, par->z1, qscale)
+            *  par->xs->FragFun()->Evaluate(D, PI0, par->z1, qscale)
+            *  par->xs->FragFun()->Evaluate(G, PI0, z2, qscale)
+        );
 
-    FragmentationFunction* fragfun = par->xs->FragFun();
+    // exchange pt1<->pt2
+    result += z2 * par->pt_interpolator->Evaluate(par->pt2/z2, par->pt1/par->z1)
+        *
+        ( par->xs->Pdf()->xq(par->xh, qscale, U)
+            * par->xs->FragFun()->Evaluate(U, PI0, z2, qscale)
+            * par->xs->FragFun()->Evaluate(G, PI0, par->z1, qscale)
+          + par->xs->FragFun()->Evaluate(D, PI0, par->z1, qscale)
+            *  par->xs->FragFun()->Evaluate(D, PI0, z2, qscale)
+            *  par->xs->FragFun()->Evaluate(G, PI0, par->z1, qscale)
+        );
 
-    // pdf and fragmentation scales are assumed to be p_t1 (leading hadron)
-    // fragmentation to neutral pions
-    result =
-        par->xs->dSigma(vec[1], vec[2], y1, y2, par->phi, par->sqrts, false)
-          * fragfun->Evaluate(G, PI0, vec[4], vec[1])*
-          ( fragfun->Evaluate(U, PI0, vec[3], vec[1])
-           +fragfun->Evaluate(D, PI0, vec[3], vec[1]) )
-        + par->xs->dSigma(vec[2], vec[1], y2, y1, par->phi, par->sqrts, false)
-          * fragfun->Evaluate(G, PI0, vec[3], vec[1])*
-          ( fragfun->Evaluate(U, PI0, vec[4], vec[1])
-           +fragfun->Evaluate(D, PI0, vec[4], vec[1]) );
+   /*cerr << "pt1/z1 " << par->pt1/par->z1 << " pt2/z2 " << par->pt2/z2 << " amp1 "
+    << par->pt_interpolator->Evaluate(par->pt1/par->z1, par->pt2/z2)
+        << " amp2 " << par->pt_interpolator->Evaluate(par->pt2/z2, par->pt1/par->z1) << endl;
 
-    // We can multiply the whole expression by this sum of PDF's as due to the
-    // isospin symmetry we have the same combination for both u and d quarks
-    result *= par->xs->Pdf()->xq(vec[0], vec[1], UVAL)
-        + par->xs->Pdf()->xq(vec[0], vec[1], DVAL);
-    
-    return result;
+    */return result;
 }
-
 
 /*
  * Funktion G_{x_A} = \int dr S(r) J_1(k*r) (m=0)
@@ -334,7 +423,7 @@ double NPairHelperf(double* vec, size_t dim, void* p)
  * as in ref. 0708.0231 but w.o. vector k/|k|
  * Default value of z=0
  */
-struct G_helper { double y; AmplitudeLib* N; double kt; double z; };
+struct G_helper { double y; AmplitudeLib* N; double kt; double z; CrossSection2 *xs; };
 double G_helperf(double r, void* p);
 double CrossSection2::G(double kt, double x, double z)
 {
@@ -343,7 +432,7 @@ double CrossSection2::G(double kt, double x, double z)
     
     G_helper helper;
     helper.y = std::log(N->X0()/x);
-    helper.N=N; helper.kt=kt; helper.z=z;
+    helper.N=N; helper.kt=kt; helper.z=z; helper.xs=this;
 
     set_fpu_state();
     init_workspace_fourier(700);   // number of bessel zeroes, max 2000
@@ -357,6 +446,7 @@ double CrossSection2::G(double kt, double x, double z)
 double G_helperf(double r, void *p)
 {
     G_helper* par = (G_helper*) p;
+    double M_Q = par->xs->M_Q();
     // Massless case
     if (M_Q<1e-5 or par->z<1e-5)
     {
@@ -387,7 +477,7 @@ double H_helperf(double r, void* p);
 double CrossSection2::H(double kt, double x, double z)
 {
     //TODO: Cache?
-    if (M_Q < 1e-5) return 0;
+    if (M_Q() < 1e-5) return 0;
     G_helper helper;
     helper.y = std::log(N->X0()/x);
     helper.N=N; helper.kt=kt; helper.z=z;
@@ -396,7 +486,7 @@ double CrossSection2::H(double kt, double x, double z)
     init_workspace_fourier(700);   // number of bessel zeroes, max 2000
 
     double result = fourier_j0(kt, H_helperf, &helper);
-    return M_Q*SQR(z)*result;
+    return M_Q()*SQR(z)*result;
 
 }
 
@@ -404,7 +494,7 @@ double H_helperf(double r, void *p)
 {
     G_helper* par = (G_helper*) p;
     // Massless case
-    if (M_Q<1e-5 or par->z<1e-5)
+    if (par->xs->M_Q()<1e-5 or par->z<1e-5)
     {
         cerr<<"Calculating massless case, are you sure? " << LINEINFO << endl;
 
@@ -412,6 +502,7 @@ double H_helperf(double r, void *p)
     }
 
     // m,z>0
+    double M_Q=par->xs->M_Q();
     double result=0;
     if (r< par->N->MinR()) result = r*gsl_sf_bessel_K0(r*M_Q*par->z);
     else if (r>par->N->MaxR()) result=0;
@@ -429,6 +520,7 @@ CrossSection2::CrossSection2(AmplitudeLib* N_, PDF* pdf_,FragmentationFunction* 
     transform=NULL;
     mcintpoints=1e7;
     gsl_rng_env_setup();
+    m_q=0.14;
 }
 
 
@@ -469,4 +561,14 @@ CrossSection2::~CrossSection2()
 {
     if (transform!=NULL)
         delete[] transform;
+}
+
+void CrossSection2::SetM_Q(double mq_)
+{
+    m_q=mq_;
+}
+
+double CrossSection2::M_Q()
+{
+    return m_q;
 }

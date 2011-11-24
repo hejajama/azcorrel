@@ -33,6 +33,7 @@ int main(int argc, char* argv[])
         cout << "-amplitude filename: where to load amplitude data" << endl;
         cout << "-mcintpoints points" << endl;
         cout << "-data amplitudedatafile" << endl;
+        cout << "-mq quark_mass in GeV" << endl;
         return 0;
     }
 
@@ -48,6 +49,7 @@ int main(int argc, char* argv[])
     double y1=3.5; double y2=2; double pt1=5; double pt2=3; double sqrts=200;
     double Q=-1;
     double phi=-1;
+    double mq=0.14;
     bool multiply_pdf=true;
     PDF *pdf=0;
     size_t mcintpoints=1e7;
@@ -74,6 +76,8 @@ int main(int argc, char* argv[])
             multiply_pdf=false;
         else if (string(argv[i])=="-data")
             filename = argv[i+1];
+        else if (string(argv[i])=="-mq")
+            mq = StrToReal(argv[i+1]);
         else if (string(argv[i])=="-pdfmode")
         {
             if (string(argv[i+1])=="MRST")
@@ -117,11 +121,7 @@ int main(int argc, char* argv[])
         return 0;
     }*/
     
-    cout <<"# Parton distribution function used: " << pdf->GetString() << endl;
-
-    cout <<"# Quark mass: " << M_Q << " GeV" << endl;
-
-    
+   
     if (Q>=0)   // Plot PDF and exit
     {
         pdf->PlotPdf(Q);
@@ -133,7 +133,12 @@ int main(int argc, char* argv[])
 
     CrossSection2 cross_section(&amplitude, pdf, &fragmentation);
     cross_section.SetMCIntPoints(mcintpoints);
+    cross_section.SetM_Q(mq);
     double ya=std::log(amplitude.X0() / cross_section.xa(pt1,pt2,y1,y2,sqrts));
+
+    cout <<"# Parton distribution function used: " << pdf->GetString() << endl;
+    cout <<"# Quark mass: " << cross_section.M_Q() << " GeV" << endl;
+
     cout << "# pt1=" << pt1 <<", pt2=" << pt2 <<", y1=" << y1 <<", y2=" << y2 <<
     " y_A=" << ya << endl;
     cout << "# x1=" << pt1*std::exp(y1)/sqrts << ", x2=" << pt2*std::exp(y2)/sqrts
@@ -149,9 +154,10 @@ int main(int argc, char* argv[])
     double normalization = 1;//cross_section.Sigma(pt1, pt2, y1, y2, sqrts);
     //cout << "# Normalization totxs " << normalization << endl;
     //cout << "# Theta=2.5 " << cross_section.dSigma(pt1,pt2,y1,y2,2.5,sqrts) << endl;
-    int points=10;
-    if (phi>-0.5) points=1;    // calculate only given angle
-    double maxphi=M_PI;
+    int points=50;
+    if (phi>-0.5) points=50;    // calculate only given angle
+    double maxphi=2.0*M_PI-1;
+    double minphi = 1;
     bool fftw=false;
 
     // FFTW
@@ -160,7 +166,9 @@ int main(int argc, char* argv[])
 
     if (fftw and multiply_pdf)
         cerr <<"Can't calculate FFT and multiply by PDF!" << endl;
-    
+
+    if (!fftw and false)
+        cross_section.LoadPtData();
 
     int ready=0;
     #pragma omp parallel for
@@ -172,11 +180,14 @@ int main(int argc, char* argv[])
             cout << "# Starting index " << ready << "/" << points << endl;
         }
         //double theta = 0.2*2.0*M_PI*(i+1.0);
-        double theta = M_PI/10.0 + (maxphi-M_PI/10.0)*i/((double)points-1.0);
+        double theta = minphi + (maxphi-minphi)*i/((double)points-1.0);
         if (phi>-0.5) theta=phi;    // calculate given value
         double result=0;
+        
         if (!fftw)
+            //result = cross_section.dSigma_full(pt1,pt2,y1,y2,theta,sqrts);
             result = cross_section.dSigma(pt1,pt2,y1,y2,theta,sqrts,multiply_pdf);
+                //+ cross_section.dSigma(pt2,pt1,y2,y1,theta,sqrts,multiply_pdf);
         else
             result = cross_section.CorrectionTerm_fft(pt1, pt2, ya, theta);
         if (result<-0.5)

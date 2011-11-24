@@ -4,7 +4,7 @@ SOURCES = src/main.cpp ../amplitudelib/pdf/mrst99.cpp ../amplitudelib/tools/tool
 		../amplitudelib/pdf/mrst.cpp ../amplitudelib/pdf/cteq.cpp src/xs.cpp \
 		../amplitudelib/fragmentation/fragmentation.cpp ../amplitudelib/fragmentation/kkp.cpp \
 		src/fourpoint.cpp ../amplitudelib/amplitudelib/virtual_photon.cpp \
-		../amplitudelib/amplitudelib/wave_function.cpp
+		../amplitudelib/amplitudelib/wave_function.cpp ../amplitudelib/tools/interpolation2d.cpp
 CSOURCES = ../amplitudelib/fourier/fourier.c
 FSOURCES = ../amplitudelib/fragmentation/fragmentation_kkp.f ../amplitudelib/pdf/CT10Pdf.f
 OBJECTS=$(SOURCES:.cpp=.o)

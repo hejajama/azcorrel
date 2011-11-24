@@ -28,13 +28,14 @@ class CrossSection2
         void CalculateCorrection_fft(double ya, double z);
         double Sigma(double pt1, double pt2, double y1, double y2, double sqrts);
 
-        double NPair(double theta, double sqrts);
 
         double z(double pt1, double pt2, double y1, double y2);
         double xa(double pt1, double pt2, double y1, double y2, double sqrts);
         double xh(double pt1, double pt2, double y1, double y2, double sqrts);
         double Delta(double pt1, double pt2, double theta);
 
+        int LoadPtData();
+        double dSigma_full(double pt1, double pt2, double y1, double y2, double phi, double sqrts);
 
         // \int dr r*S(r)*K_1(mzr)*J1(kr)
         double G(double kt, double x, double z=0);
@@ -46,7 +47,11 @@ class CrossSection2
 
         void SetMCIntPoints(size_t points);
 
+        void SetM_Q(double mq);
+        double M_Q();
+
     private:
+        double m_q; // Quark mass
         AmplitudeLib* N;
         PDF* pdf;
         FragmentationFunction* fragfun;
@@ -61,8 +66,13 @@ class CrossSection2
 
         double V2int(double rx, double ry, double v1x, double v1y, double y, double z);
         size_t mcintpoints;
+
+        // [pt1ind][pt2ind]
+        std::vector<std::vector< Interpolator*> > ptinterpolators;
+
+        std::vector<double> ptvals;
+        std::vector<std::string> ptstrings;
         
 };
-const double M_Q =1.0; //0.14;  // GeV
 
 #endif

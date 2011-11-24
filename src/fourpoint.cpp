@@ -24,6 +24,7 @@ struct Inthelper_correction
     double phi;
     AmplitudeLib* N;
     size_t calln; int monte;
+    CrossSection2* xs;
 
     double u1,u2,r,theta1,theta2,thetar,z;
 };
@@ -31,8 +32,8 @@ struct Inthelper_correction
 double Inthelperf_correction(double* vec, size_t dim, void* p);
 double NormalizeAngle(double phi);
 
-bool cyrille=false;
-bool correction=true;
+bool cyrille=true;
+bool correction=false;
 
 /*
  * Calculates the correction term/full integral over 6-dim. hypercube
@@ -53,15 +54,9 @@ double CrossSection2::CorrectionTerm(double pt1, double pt2, double ya, double p
     // pt1=k, pt2=q
 
     N->SetOutOfRangeErrors(false);
-    double minr=std::log(0.005); double maxr=std::log(1500);
+    double minr=std::log(0.005); double maxr=std::log(15000);
     //double minr=0; double maxr=2000;
-    /*
-    #pragma omp critical
-    cout << "# MC integral at phi=" << phi <<", z=" << z
-    << " ya=" << ya <<", pt1=" << pt1 << " pt2=" << pt2 <<" M_Q=" << M_Q << "GeV" <<
-    " minr " << std::exp(minr) << " maxr " << std::exp(maxr) << " calls " << calls <<
-    " cyrille " << cyrille << " correction " << correction << endl;
-*/
+
     double (*integrand)(double*,size_t,void*) = Inthelperf_correction;
     //cout <<"# Integrand is full" << endl;
 
@@ -91,7 +86,7 @@ double CrossSection2::CorrectionTerm(double pt1, double pt2, double ya, double p
     double res=0;
     // Constants taken out from integral in order to reduse number of
     // products in integrand
-    double constants = 8.0*SQR(M_PI)*SQR(z)*SQR(M_Q)/std::pow(2.0*M_PI, 6);
+    double constants = 8.0*SQR(M_PI)*SQR(z)*SQR(M_Q())/std::pow(2.0*M_PI, 6);
     
     //#pragma omp parallel sections
     //{
@@ -142,6 +137,7 @@ double CrossSection2::CorrectionTerm(double pt1, double pt2, double ya, double p
             Inthelper_correction helper;
             helper.pt1=pt1; helper.pt2=pt2; helper.phi=phi; helper.ya=ya;
             helper.N=N; helper.z=z; helper.calln=0; helper.monte=3;
+            helper.xs=this;
             gsl_monte_function G = {integrand, 6, &helper};
             
             double result,abserr;
@@ -328,6 +324,7 @@ double Inthelperf_correction(double* vec, size_t dim, void* p)
     // In order to optimize, factor 8*pi^2*m^2*z^2
     // is outside the integral
     // factor 1/k^+ is thrown away as it cancels eventually
+    double M_Q = par->xs->M_Q();
     result *= (1.0+SQR(1.0-par->z))*u1_dot_u2 /(u1*u2)
                 * gsl_sf_bessel_K1(par->z*M_Q*u1)
                 * gsl_sf_bessel_K1(par->z*M_Q*u2)

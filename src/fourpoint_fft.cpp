@@ -18,16 +18,16 @@
 #include <string>
 #include <sstream>
 
-const double R_RANGE = 14;
+const double R_RANGE = 13;
 
-const bool READFILE = false; // Read integrand from a file
+const bool READFILE = true; // Read integrand from a file
 
 bool fftw_cyrille=true;
 bool fftw_correction=false;
 
 void CrossSection2::CalculateCorrection_fft(double ya, double z)
 {
-    Nd = 50;   // Number of datapoints for each dimension
+    Nd = 34;   // Number of datapoints for each dimension
                             // must satisfy Nd%2==0
     const double maxr = R_RANGE;   // Maximum length of vector component
     delta = maxr/Nd*2.0;
@@ -312,6 +312,7 @@ struct Inthelper_v2int
     double z;
     double s_r_p_zv1;
     AmplitudeLib* N;
+    CrossSection2 *xs;
 };
 const int VINTINTERVALS = 20;
 const double VINTACCURACY = 0.04;
@@ -330,6 +331,7 @@ double CrossSection2::V2int(double rx, double ry, double v1x, double v1y, double
     helper.r_p_v1 = std::sqrt( SQR(rx+v1x) + SQR(ry+v1y) );
     helper.s_r_p_v1 = N->S(helper.r_p_v1, y);
     helper.s_r_p_zv1 = N->S( std::sqrt( SQR(rx+z*v1x) + SQR(ry+z*v1y)),y);
+    helper.xs=this;
 
     ///DEBUG
     /*
@@ -356,14 +358,14 @@ double CrossSection2::V2int(double rx, double ry, double v1x, double v1y, double
     double result,abserr;
 
     double min = std::log(1e-5);
-    double max = std::log(8.0*R_RANGE);
+    double max = std::log(80.0*R_RANGE); // 1gev: 8*
 
 
     int status = gsl_integration_qag(&f, min, max,
             0, VINTACCURACY, VINTINTERVALS, GSL_INTEG_GAUSS31, workspace,
             &result, &abserr);
     gsl_integration_workspace_free(workspace);
-    result *= 8.0*SQR(M_PI)*SQR(M_Q)*SQR(z);
+    result *= 8.0*SQR(M_PI)*SQR(M_Q())*SQR(z);
 
     if (status)
         cerr << "v2rint failed at " << LINEINFO <<", result " << result
@@ -405,11 +407,12 @@ double Inthelperf_v2rint(double lnv2, void* p)
 double Inthelperf_v2thetaint(double theta, void* p)
 {
     Inthelper_v2int* par = (Inthelper_v2int*)p;
+    double M_Q = par->xs->M_Q();
     double rx = par->rx; double ry=par->ry;
     double v1x = par->v1x; double v1y = par->v1y;
     double v2x = par->v2_r * std::cos(theta);
     double v2y = par->v2_r * std::sin(theta);
-    double rsqr = SQR(rx)+SQR(ry);
+    //double rsqr = SQR(rx)+SQR(ry);
     
   
     AmplitudeLib* N = par->N;
