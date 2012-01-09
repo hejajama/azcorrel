@@ -6,7 +6,7 @@ include filelist.m
 all: rbk
 
 rbk: $(OBJECTS) $(COBJECTS) $(FOBJECTS) 
-	g++ $(CXXFLAGS) $(LDFLAGS) $(OBJECTS) $(COBJECTS) $(FOBJECTS) -lgfortran -o azcorrel
+	g++ $(CXXFLAGS) $(LDFLAGS) $(OBJECTS) ../amplitudelib/libamplitude.a -lgfortran -o azcorrel
 .cpp.o:
 	 g++ $(CXXFLAGS) $< -c -o $@
 .c.o:

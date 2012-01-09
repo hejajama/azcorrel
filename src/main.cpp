@@ -136,7 +136,10 @@ int main(int argc, char* argv[])
     cross_section.SetM_Q(mq);
     double ya=std::log(amplitude.X0() / cross_section.xa(pt1,pt2,y1,y2,sqrts));
 
-    cout <<"# Parton distribution function used: " << pdf->GetString() << endl;
+    if (multiply_pdf)
+        cout <<"# Parton distribution function used: " << pdf->GetString() << endl;
+    else
+        cout <<"# Not multiplying by PDF" << endl;
     cout <<"# Quark mass: " << cross_section.M_Q() << " GeV" << endl;
 
     cout << "# pt1=" << pt1 <<", pt2=" << pt2 <<", y1=" << y1 <<", y2=" << y2 <<
@@ -154,9 +157,9 @@ int main(int argc, char* argv[])
     double normalization = 1;//cross_section.Sigma(pt1, pt2, y1, y2, sqrts);
     //cout << "# Normalization totxs " << normalization << endl;
     //cout << "# Theta=2.5 " << cross_section.dSigma(pt1,pt2,y1,y2,2.5,sqrts) << endl;
-    int points=50;
-    if (phi>-0.5) points=50;    // calculate only given angle
-    double maxphi=2.0*M_PI-1;
+    int points=7;
+    if (phi>-0.5) points=1;    // calculate only given angle
+    double maxphi=2.0*M_PI-2;
     double minphi = 1;
     bool fftw=false;
 
@@ -174,15 +177,16 @@ int main(int argc, char* argv[])
     #pragma omp parallel for
     for (int i=0; i<points; i++)
     {
-        #pragma omp critical
-        {
-            ready++;
-            cout << "# Starting index " << ready << "/" << points << endl;
-        }
         //double theta = 0.2*2.0*M_PI*(i+1.0);
         double theta = minphi + (maxphi-minphi)*i/((double)points-1.0);
         if (phi>-0.5) theta=phi;    // calculate given value
         double result=0;
+        
+        #pragma omp critical
+        {
+            ready++;
+            cout << "# Starting index " << ready << "/" << points << " angle " << theta << endl;
+        }
         
         if (!fftw)
             //result = cross_section.dSigma_full(pt1,pt2,y1,y2,theta,sqrts);
@@ -190,15 +194,16 @@ int main(int argc, char* argv[])
                 //+ cross_section.dSigma(pt2,pt1,y2,y1,theta,sqrts,multiply_pdf);
         else
             result = cross_section.CorrectionTerm_fft(pt1, pt2, ya, theta);
-        if (result<-0.5)
+        /*if (result<-0.5)
         {
             //cout <<"# " << theta <<" MC integral failed " << endl;
             continue;
-        }
+        }*/
         
         #pragma omp critical
         {
             cout << theta << " " << result/normalization << " "
+            << cross_section.dSigma_lo(pt1, pt2, y1, y2, theta, sqrts, multiply_pdf) << " "
                 //<< cross_section.CorrectionTerm_fft(pt1,pt2, ya, theta)
                 << endl;
         }

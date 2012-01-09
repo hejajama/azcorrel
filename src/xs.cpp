@@ -33,8 +33,9 @@ double CrossSection2::dSigma_lo(double pt1, double pt2, double y1, double y2, do
     double tmpz = z(pt1, pt2, y1, y2);
     double tmpxa = xa(pt1, pt2, y1, y2, sqrts);
 
-    double result = std::pow(1.0-tmpz, 3.0)*(1.0+SQR(1.0-tmpz));
-    double qs = 1.0/N->SaturationScale(std::log(N->X0()/tmpxa), 0.22);
+    //double result = std::pow(1.0-tmpz, 3.0)*(1.0+SQR(1.0-tmpz));
+    double result = std::pow(1.0-tmpz, 2.0)*(1.0+SQR(1.0-tmpz));
+    double qs = 1.0/N->SaturationScale(std::log(N->X0()/tmpxa), 0.5);
     result *= SQR(qs);
 
     double delta = Delta(pt1, pt2, theta);
@@ -49,9 +50,12 @@ double CrossSection2::dSigma_lo(double pt1, double pt2, double y1, double y2, do
         result *= 2.0*(pdf->xq(tmpxh, delta, UVAL) + pdf->xq(tmpxh, delta, DVAL));
         // factor 2 from isospin symmetry: xf_u,p = xf_d,n
 
-    result *= pt1*pt2;
+    result *= 2.0/M_PI; // 1/(2\pi)^2 is factorized out
+
+    /*result *= pt1*pt2;
 
     result *= ALPHAS*Cf/(2.0*std::pow(M_PI,3));
+    */
 
     return result;
 }
@@ -95,11 +99,12 @@ double CrossSection2::dSigma(double pt1, double pt2, double y1, double y2, doubl
     g = G(pt2, tmpxa, tmpz);
     f=N->S_k(delta, ya)/SQR(2.0*M_PI);
 
+
     // (k - z\delta)^2 = (1-z)^2 pt1^2 + z^2 pt2^2 - 2*z*(1-z)*pt1*pt2*cos \phi
     double kzdeltasqr = SQR(1.0-tmpz)*SQR(pt1) + SQR(tmpz*pt2) - 2.0*tmpz*(1.0-tmpz)
                                 * pt1*pt2*std::cos(phi);
 
-    cout << "# phi " << phi << " delta " << delta << "kzdeltasqr " << kzdeltasqr <<   endl;
+    //cout << "# phi " << phi << " delta " << delta << "kzdeltasqr " << kzdeltasqr <<   endl;
     // m=0
     if (M_Q() < 1e-5)
     {
@@ -124,11 +129,11 @@ double CrossSection2::dSigma(double pt1, double pt2, double y1, double y2, doubl
 
     // CorrectionTerm returns -1 if the integral doesn't converge
     
-    /*double correction = CorrectionTerm(pt1,pt2,ya,phi,tmpz);
-    if (std::abs(correction+1.0)<0.001) return -1;
+    double correction = CorrectionTerm(pt1,pt2,ya,phi,tmpz);
+    //if (std::abs(correction+1.0)<0.001) return -1;
    	//result +=correction;
     result = correction;
-    */
+    
     /*result = CorrectionTerm_fft(pt1, pt2, ya, phi);
     #pragma omp critical
     cout <<"# phi=" << phi <<" MC result " << result << endl;
@@ -138,7 +143,7 @@ double CrossSection2::dSigma(double pt1, double pt2, double y1, double y2, doubl
     {
         // return Marquet's k^+|foo|^2F() with correction term, not multiplied
         // by any constants, so ~d\sigma/d^3kd^3q
-        // Marquet's M w.o. (2\pi)^-2
+        // Marquet's M w.o. S/(2\pi)^2
         return result;
     }
     
@@ -235,13 +240,13 @@ int CrossSection2::LoadPtData()
    // Load datafiles 
    // Generate interpolators
 
-   ptvals.push_back(1.0);
-   ptvals.push_back(3.0); ptvals.push_back(5.0); //ptvals.push_back(7.0);
-   ptstrings.push_back("1");
-   ptstrings.push_back("3"); ptstrings.push_back("5");
-   //ptstrings.push_back("7");
-
-
+    ptvals.push_back(1.0); ptvals.push_back(1.5); ptvals.push_back(2.0);
+    ptvals.push_back(2.5); ptvals.push_back(3.0); ptvals.push_back(3.5);
+    ptvals.push_back(4.0); ptvals.push_back(4.5); ptvals.push_back(5.0);
+   
+    ptstrings.push_back("1"); ptstrings.push_back("1.5"); ptstrings.push_back("2");
+    ptstrings.push_back("2.5"); ptstrings.push_back("3"); ptstrings.push_back("3.5");
+    ptstrings.push_back("4"); ptstrings.push_back("4.5"); ptstrings.push_back("5");
 
    int points=ptvals.size();
    for (int pt1ind=0; pt1ind<points; pt1ind++)
@@ -250,8 +255,7 @@ int CrossSection2::LoadPtData()
        for (int pt2ind=0; pt2ind<points; pt2ind++)
        {
             std::stringstream fname;
-            fname << "taulukointi/pt1_" << ptstrings[pt1ind] << "_pt2_" << ptstrings[pt2ind]
-                << "_sort";
+            fname << "taulukointi/cyrille/pp/pt1_" << ptstrings[pt1ind] << "_pt2_" << ptstrings[pt2ind];
             cout << "# Loading file " << fname.str() << endl;
             std::ifstream file(fname.str().c_str());
             std::vector<double> dphi;
@@ -272,15 +276,20 @@ int CrossSection2::LoadPtData()
 
             file.close();
 
-            // Mirror \dphi
-            int center_index = dphi.size()-1;
-            for (int i=dphi.size()-2; i>=0; i--)
+            if (xs.size()<2) continue;
+
+            // Mirror \dphi if necessary
+            if (dphi[dphi.size()-1] < 1.1*M_PI)
             {
-                dphi.push_back(M_PI + (M_PI-dphi[i]) );
-                xs.push_back(xs[i]);
+                int center_index = dphi.size()-1;
+                for (int i=dphi.size()-2; i>=0; i--)
+                {
+                    dphi.push_back(M_PI + (M_PI-dphi[i]) );
+                    xs.push_back(xs[i]);
+                }
             }
 
-            if (xs.size()<2) continue;
+            
 
             Interpolator *tmpinterp = new Interpolator(dphi, xs);
             tmpinterp->Initialize();
@@ -308,7 +317,7 @@ struct dSigma_full_helper
 double dSigma_full_helperf_z1(double z1, void* p);
 double dSigma_full_helperf_z2(double z2, void* p);
 
-const int PTINT_INTERVALS=3;
+const int PTINT_INTERVALS=5;
 
 double CrossSection2::dSigma_full(double pt1, double pt2, double y1, double y2,
     double phi, double sqrts)
@@ -373,10 +382,10 @@ double dSigma_full_helperf_z1(double z1, void* p)
             &result, &abserr);
     gsl_integration_workspace_free(workspace);
     
-    if (status)
+    /*if (status)
         cerr << "z2int failed at " << LINEINFO <<", result " << result
         << " relerror " << std::abs(abserr/result) << " dphi " << par->phi << endl;
-    return result;
+    */return result;
 }
 
 double dSigma_full_helperf_z2(double z2, void* p)
@@ -480,7 +489,7 @@ double CrossSection2::H(double kt, double x, double z)
     if (M_Q() < 1e-5) return 0;
     G_helper helper;
     helper.y = std::log(N->X0()/x);
-    helper.N=N; helper.kt=kt; helper.z=z;
+    helper.N=N; helper.kt=kt; helper.z=z; helper.xs=this;
 
     set_fpu_state();
     init_workspace_fourier(700);   // number of bessel zeroes, max 2000

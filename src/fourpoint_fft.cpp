@@ -18,16 +18,16 @@
 #include <string>
 #include <sstream>
 
-const double R_RANGE = 13;
+const double R_RANGE = 23;
 
-const bool READFILE = true; // Read integrand from a file
+const bool READFILE = false; // Read integrand from a file
 
-bool fftw_cyrille=true;
-bool fftw_correction=false;
+bool fftw_cyrille=false;
+bool fftw_correction=true;
 
 void CrossSection2::CalculateCorrection_fft(double ya, double z)
 {
-    Nd = 34;   // Number of datapoints for each dimension
+    Nd = 42;  // Number of datapoints for each dimension
                             // must satisfy Nd%2==0
     const double maxr = R_RANGE;   // Maximum length of vector component
     delta = maxr/Nd*2.0;
@@ -264,7 +264,7 @@ double CrossSection2::CorrectionTerm_fft(double pt1, double pt2,
         or pt1 + pt2*std::cos(phi) > 2.0*M_PI/(2.0*delta) )
         cerr << "Too large momenta!!" << endl;
         
-    int kyind = 0; double ky=0;
+    int kyind = 0; 
     int kxind = round(Nd*delta*pt1/(2.0*M_PI));
     double kx = (double)kxind / (Nd*delta) * 2.0*M_PI;
     //cout <<"# kx: " << pt1 << " -> " << kx << " kxind " << kxind <<endl;
@@ -314,7 +314,8 @@ struct Inthelper_v2int
     AmplitudeLib* N;
     CrossSection2 *xs;
 };
-const int VINTINTERVALS = 20;
+const int VINTINTERVALS = 10;
+const int VTHETAINERVALS = 13;
 const double VINTACCURACY = 0.04;
 double Inthelperf_v2thetaint(double theta, void* p);
 double Inthelperf_v2rint(double lnv2r, void* p);
@@ -334,8 +335,8 @@ double CrossSection2::V2int(double rx, double ry, double v1x, double v1y, double
     helper.xs=this;
 
     ///DEBUG
-    /*
-    for (double v2=0.001; v2<1e6; v2*=1.2)
+    
+    /*for (double v2=0.001; v2<100*R_RANGE; v2*=1.2)
     {
         for (double theta=0; theta < 2.0*M_PI; theta+=0.03)
         { 
@@ -346,8 +347,8 @@ double CrossSection2::V2int(double rx, double ry, double v1x, double v1y, double
         //cout << v2 << " " << Inthelperf_v2rint(std::log(v2), &helper)/v2 << endl;
         }   
     }
-    exit(1);*/
-    
+    exit(1);
+    */
     
     
     gsl_function f;
@@ -357,21 +358,21 @@ double CrossSection2::V2int(double rx, double ry, double v1x, double v1y, double
      = gsl_integration_workspace_alloc(VINTINTERVALS);
     double result,abserr;
 
-    double min = std::log(1e-5);
-    double max = std::log(80.0*R_RANGE); // 1gev: 8*
+    double min = std::log(1e-3);
+    double max = std::log(10.0*R_RANGE); // 1gev: 8*
 
 
     int status = gsl_integration_qag(&f, min, max,
-            0, VINTACCURACY, VINTINTERVALS, GSL_INTEG_GAUSS31, workspace,
+            0, VINTACCURACY, VINTINTERVALS, GSL_INTEG_GAUSS51, workspace,
             &result, &abserr);
     gsl_integration_workspace_free(workspace);
     result *= 8.0*SQR(M_PI)*SQR(M_Q())*SQR(z);
 
-    if (status)
+    /*if (status)
         cerr << "v2rint failed at " << LINEINFO <<", result " << result
         << " relerror " << std::abs(abserr/result) << " rx: " << rx << " ry "
         << ry << " v1x " << v1x << " v1y " << v1y << endl;
-
+*/
     return result;
 }
 
@@ -384,23 +385,23 @@ double Inthelperf_v2rint(double lnv2, void* p)
     f.function = Inthelperf_v2thetaint;
     f.params = par;
     gsl_integration_workspace *workspace 
-     = gsl_integration_workspace_alloc(VINTINTERVALS);
+     = gsl_integration_workspace_alloc(VTHETAINERVALS);
     double result,abserr;
 
     double min = 0;
     double max = 2.0*M_PI;
 
     int status = gsl_integration_qag(&f, min, max,
-            0, VINTACCURACY, VINTINTERVALS, GSL_INTEG_GAUSS31, workspace,
+            0, VINTACCURACY, VTHETAINERVALS, GSL_INTEG_GAUSS51, workspace,
             &result, &abserr);
     gsl_integration_workspace_free(workspace);
-
+/*
     if (status and std::abs(result*SQR(par->v2_r))>1e-6)
         cerr << "v2thetaint failed at " << LINEINFO <<", result " << result
         << " relerror " << std::abs(abserr/result) << " rx: " << par->rx << " ry "
         << par->ry << " v1x " << par->v1x << " v1y " << par->v1y << " "
         << " v2 " << std::exp(lnv2) << endl;
-
+*/
     return result*SQR(par->v2_r);
 }
 
@@ -497,13 +498,19 @@ double Inthelperf_v2thetaint(double theta, void* p)
     // wave function product
 
     // Factor 8pi^2 m^2 z^2 is outside the integral
+    // bessels for efficiency
+    double v2_m_05v1_bessel[2];
+    gsl_sf_bessel_Kn_array(0,1,par->z*M_Q*v2_m_05v1, v2_m_05v1_bessel);
+    double v2_p_05v1_bessel[2];
+    gsl_sf_bessel_Kn_array(0,1,par->z*M_Q*v2_p_05v1, v2_p_05v1_bessel);
+    
     result *= (1.0+SQR(1.0-par->z))
              *(SQR(par->v2_r)-0.25*(SQR(v1x) + SQR(v1y)))
                 / (v2_m_05v1 * v2_p_05v1)
-             * gsl_sf_bessel_K1(par->z*M_Q*v2_m_05v1)
-             * gsl_sf_bessel_K1(par->z*M_Q*v2_p_05v1)
-            + SQR(par->z)*gsl_sf_bessel_K0(par->z*M_Q*v2_m_05v1)
-             * gsl_sf_bessel_K0(par->z*M_Q*v2_p_05v1)  ;
+             * v2_m_05v1_bessel[1] // gsl_sf_bessel_K1(par->z*M_Q*v2_m_05v1)
+             * v2_p_05v1_bessel[1] //gsl_sf_bessel_K1(par->z*M_Q*v2_p_05v1)
+            + SQR(par->z)* v2_m_05v1_bessel[0] //gsl_sf_bessel_K0(par->z*M_Q*v2_m_05v1)
+             * v2_p_05v1_bessel[0]; //gsl_sf_bessel_K0(par->z*M_Q*v2_p_05v1) 
        
 
     // m,z=0
