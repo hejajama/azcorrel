@@ -7,6 +7,14 @@
 #include <gsl/gsl_sf_bessel.h>
 #include <cmath>
 #include <ctime>
+#include <mpi.h>
+#include "config.hpp"
+
+extern "C"
+{
+    #include "pvegas/vegas.h"
+}
+
 
 using std::cos;
 using std::sin;
@@ -31,10 +39,11 @@ struct Inthelper_correction
 
 double Inthelperf_correction(double* vec, size_t dim, void* p);
 double Inthelperf_correction2(double* vec, size_t dim, void* p);
+void pVegas_wrapper(double x[6], double f[1], void* par);
 double NormalizeAngle(double phi);
 
-bool cyrille=true;
-bool correction=false;
+bool cyrille=false;
+bool correction=true;
 
 /*
  * Calculates the correction term/full integral over 6-dim. hypercube
@@ -141,12 +150,15 @@ double CrossSection2::CorrectionTerm(double pt1, double pt2, double ya, double p
         
          */
         //#pragma omp section
-        //{
-           
-            Inthelper_correction helper;
+        //
+
+        Inthelper_correction helper;
             helper.pt1=pt1; helper.pt2=pt2; helper.phi=phi; helper.ya=ya;
             helper.N=N; helper.z=z; helper.calln=0; helper.monte=3;
             helper.xs=this;
+        
+        //{   
+            #ifndef USE_MPI
             gsl_monte_function G = {integrand, 6, &helper};
             
             double result,abserr;
@@ -209,7 +221,7 @@ double CrossSection2::CorrectionTerm(double pt1, double pt2, double ya, double p
                 cout <<"# " << phi << " MC integral with " << calls << " points and " << i << " iterations took " << (std::time(NULL)-start)/60.0/60.0 <<" hours " << endl;
             }
         //}// end omp section
-        
+        #endif
 
     
         
@@ -217,7 +229,54 @@ double CrossSection2::CorrectionTerm(double pt1, double pt2, double ya, double p
 
 
 
+
+    /// MPI & PVEGAS
+    #ifdef USE_MPI
     
+    double estim[1];   // estimators for integrals 
+    double std_dev[1]; // standard deviations              
+    double chi2a[1];   // chi^2/n       
+    int workers = 1;
+    MPI_Comm_size(MPI_COMM_WORLD, &workers);
+    workers--;
+    if (workers==0)
+    {
+        cerr << "No workers! MPI needs at least two threads! " << endl;
+        return -1;
+    }
+    
+    const int dim=6;
+    double reg[2*dim];
+    int functions = 1;
+    reg[0]=minr; reg[1]=minr; reg[2]=minr;
+    reg[dim]=maxr; reg[dim+1]=maxr; reg[dim+2]=maxr;
+    reg[3]=0; reg[4]=0; reg[5]=0;
+    reg[dim+3]=2.0*M_PI; reg[dim+4]=2.0*M_PI; reg[dim+5]=2.0*M_PI;
+    
+    // set up the grid (init = 0) with 5 iterations of 1000 samples,
+    // no need to compute additional accumulators (fcns = 1),
+    // no parallelization yet (wrks = 1). 
+    vegas(reg, dim, pVegas_wrapper,
+        0, 100000, 5, NPRN_INPUT | NPRN_RESULT,
+        functions, 0, 1,
+        estim, std_dev, chi2a, &helper);
+      // refine the grid (init = 1) with 5 iterations of 10000 samples,
+      // collect in additional accumulators (fcns = FUNCTIONS),
+      // two parallel workers (wrks = 2). 
+      vegas(reg, dim, pVegas_wrapper,
+            1, 1000000, 5, NPRN_INPUT | NPRN_RESULT,
+            functions, 0, 2,
+            estim, std_dev, chi2a, &helper);
+      // final sample, inheriting previous results (init = 2) 
+      vegas(reg, dim, pVegas_wrapper,
+            2, mcintpoints, 2, NPRN_INPUT | NPRN_RESULT,
+            functions, 0,  workers,
+            estim, std_dev, chi2a, &helper);
+
+      printf ("# Result: %g +/- %g\n", estim[0], std_dev[0]);
+
+    res = estim[0]*constants;
+    #endif
 
     return res;
 }
@@ -533,6 +592,10 @@ double Inthelperf_correction2(double* vec, size_t dim, void* p)
 
 
 
+void pVegas_wrapper(double x[6], double f[1], void* par)
+{
+    f[0] = Inthelperf_correction2(x, 6, par);
+}
 
 
 

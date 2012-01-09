@@ -4,12 +4,15 @@
 #include <tools/config.hpp>
 #include <tools/tools.hpp>
 #include <amplitudelib/amplitudelib.hpp>
-#include "xs.hpp"
 #include <fragmentation/kkp.hpp>
 #include <iostream>
 #include <cmath>
 #include <gsl/gsl_errno.h>
 #include <sstream>
+#include <mpi.h>
+
+#include "xs.hpp"
+#include "config.hpp"
 
 
 using std::cout; using std::endl;
@@ -19,7 +22,7 @@ void PlotPdf(double Q);
 
 int main(int argc, char* argv[])
 {
-    if (string(argv[1])=="-help")
+        if (string(argv[1])=="-help")
     {
         cout << "-y1 y: set rapidity of particle 1" << endl;
         cout << "-y2 2: set rapidity of particle 2" << endl;
@@ -32,15 +35,29 @@ int main(int argc, char* argv[])
         cout << "-nopdf: don't multiply by pdf, prints ~d\\sigma/d^3kd^3q" << endl;
         cout << "-amplitude filename: where to load amplitude data" << endl;
         cout << "-mcintpoints points" << endl;
-        cout << "-data amplitudedatafile" << endl;
         cout << "-mq quark_mass in GeV" << endl;
         return 0;
     }
 
+    #ifdef USE_MPI
+    int rc = MPI_Init(&argc, &argv);
+    if (rc != MPI_SUCCESS)
+    {
+        cerr << "MPI Initialization failed" << endl;
+        return -1;
+    }
+    int id;
+    MPI_Comm_rank(MPI_COMM_WORLD, &id);
+    #endif
+
     std::stringstream s;
     for (int i=0; i<argc; i++)
         s << argv[i] << " ";
+    #ifdef USE_MPI
+    if (id==0)
+    #endif
     cout << "# " << s.str() << endl;
+
 
     gsl_set_error_handler(&ErrHandler);
     std::string filename="amplitude.dat";
@@ -74,8 +91,6 @@ int main(int argc, char* argv[])
             Q=StrToReal(argv[i+1]);
         else if (string(argv[i])=="-nopdf")
             multiply_pdf=false;
-        else if (string(argv[i])=="-data")
-            filename = argv[i+1];
         else if (string(argv[i])=="-mq")
             mq = StrToReal(argv[i+1]);
         else if (string(argv[i])=="-pdfmode")
@@ -136,6 +151,11 @@ int main(int argc, char* argv[])
     cross_section.SetM_Q(mq);
     double ya=std::log(amplitude.X0() / cross_section.xa(pt1,pt2,y1,y2,sqrts));
 
+    #ifdef USE_MPI
+    if (id==0)
+    {
+    #endif
+
     if (multiply_pdf)
         cout <<"# Parton distribution function used: " << pdf->GetString() << endl;
     else
@@ -152,14 +172,17 @@ int main(int argc, char* argv[])
     cout << "# Q_s = " << 1.0/amplitude.SaturationScale(ya, 0.22) << " GeV " << endl;
     cout << "# MC Integration points " << mcintpoints << endl;
 
+    #ifdef USE_MPI
+    }
+    #endif
 
     amplitude.InitializeInterpolation(ya);
     double normalization = 1;//cross_section.Sigma(pt1, pt2, y1, y2, sqrts);
     //cout << "# Normalization totxs " << normalization << endl;
     //cout << "# Theta=2.5 " << cross_section.dSigma(pt1,pt2,y1,y2,2.5,sqrts) << endl;
-    int points=7;
+    int points=20;
     if (phi>-0.5) points=1;    // calculate only given angle
-    double maxphi=2.0*M_PI-2;
+    double maxphi=2.0*M_PI-1;
     double minphi = 1;
     bool fftw=false;
 
@@ -185,7 +208,11 @@ int main(int argc, char* argv[])
         #pragma omp critical
         {
             ready++;
+            #ifdef USE_MPI
+            if (id==0)
+            #endif
             cout << "# Starting index " << ready << "/" << points << " angle " << theta << endl;
+            
         }
         
         if (!fftw)
@@ -202,6 +229,9 @@ int main(int argc, char* argv[])
         
         #pragma omp critical
         {
+            #ifdef USE_MPI
+            if (id==0)
+            #endif
             cout << theta << " " << result/normalization << " "
             << cross_section.dSigma_lo(pt1, pt2, y1, y2, theta, sqrts, multiply_pdf) << " "
                 //<< cross_section.CorrectionTerm_fft(pt1,pt2, ya, theta)
@@ -212,9 +242,11 @@ int main(int argc, char* argv[])
 
 
     delete pdf;
-    
 
-
+    #ifdef USE_MPI
+    //if (id==0)
+        MPI_Finalize();
+    #endif
 
     return 0;
 }

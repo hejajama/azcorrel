@@ -2,18 +2,25 @@ CXXFLAGS = `gsl-config --cflags` -O3 -Wall -pedantic -fopenmp -I ../amplitudelib
 LDFLAGS = `gsl-config --libs` -lm -lfftw3 -lgfortran -lpthread #-L../amplitudelib/ -lamplitude 
 CFLAGS = -O2 -D_REENTRANT
 
+#CC = gcc
+#CXX = g++
+#FOR = gfortran
+CC = mpicc
+CXX = mpic++
+FOR = mpif90
+
 include filelist.m
 
 all: azcorrel 
 
 azcorrel: $(OBJECTS) $(COBJECTS) 
-	g++ $(CXXFLAGS) $(LDFLAGS) $(OBJECTS) $(COBJECTS) ../amplitudelib/libamplitude.a -lgfortran -o azcorrel
+	$(CXX) $(CXXFLAGS) $(LDFLAGS) $(OBJECTS) $(COBJECTS) ../amplitudelib/libamplitude.a -lgfortran -o azcorrel
 .cpp.o:
-	 g++ $(CXXFLAGS) $< -c -o $@
+	 $(CXX) $(CXXFLAGS) $< -c -o $@
 .c.o:
-	gcc $(CXXFLAGS) $(CFLAGS) $< -c -o $@
+	$(CC) $(CXXFLAGS) $(CFLAGS) $< -c -o $@
 .f.o:
-	gfortran -c $< -c -o $@
+	$(FOR) -c $< -c -o $@
 
 clean:
 	rm -f $(OBJECTS)

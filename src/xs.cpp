@@ -129,10 +129,10 @@ double CrossSection2::dSigma(double pt1, double pt2, double y1, double y2, doubl
 
     // CorrectionTerm returns -1 if the integral doesn't converge
     
-    double correction = CorrectionTerm(pt1,pt2,ya,phi,tmpz);
+    //double correction = CorrectionTerm(pt1,pt2,ya,phi,tmpz);
     //if (std::abs(correction+1.0)<0.001) return -1;
    	//result +=correction;
-    result = correction;
+    //result = correction;
     
     /*result = CorrectionTerm_fft(pt1, pt2, ya, phi);
     #pragma omp critical
