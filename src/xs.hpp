@@ -34,8 +34,11 @@ class CrossSection2
         double xh(double pt1, double pt2, double y1, double y2, double sqrts);
         double Delta(double pt1, double pt2, double theta);
 
-        int LoadPtData();
-        double dSigma_full(double pt1, double pt2, double y1, double y2, double phi, double sqrts);
+        int LoadPtData(double y1, double y2);
+        double dSigma_full(double pt1, double pt2, double y1, double y2, double phi,
+            double sqrts, bool deuteron=false);
+        double dSigma_integrated(double minpt1, double minpt2, double miny, double maxy,
+            double phi, double sqrts, bool deuteron=false);
 
         // \int dr r*S(r)*K_1(mzr)*J1(kr)
         double G(double kt, double x, double z=0);
@@ -49,6 +52,8 @@ class CrossSection2
 
         void SetM_Q(double mq);
         double M_Q();
+
+        double MaxPt(); // ptvals[ptvals.size()-1]
 
     private:
         double m_q; // Quark mass

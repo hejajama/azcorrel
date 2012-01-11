@@ -9,10 +9,14 @@
 #include <cmath>
 #include <gsl/gsl_errno.h>
 #include <sstream>
-#include <mpi.h>
+
+#include "config.hpp"
+#ifdef USE_MPI
+    #include <mpi.h>
+#endif
 
 #include "xs.hpp"
-#include "config.hpp"
+
 
 
 using std::cout; using std::endl;
@@ -36,6 +40,7 @@ int main(int argc, char* argv[])
         cout << "-amplitude filename: where to load amplitude data" << endl;
         cout << "-mcintpoints points" << endl;
         cout << "-mq quark_mass in GeV" << endl;
+        cout << "-deuteron: use deuteron as a probe" << endl;
         return 0;
     }
 
@@ -70,7 +75,8 @@ int main(int argc, char* argv[])
     bool multiply_pdf=true;
     PDF *pdf=0;
     size_t mcintpoints=1e7;
-    
+    bool deuteron=false;   
+
     for (int i=1; i<argc; i++)
     {
         if (string(argv[i])=="-y1")
@@ -117,6 +123,8 @@ int main(int argc, char* argv[])
             tmpstr >> mcintpoints;
             
         }
+        else if (string(argv[i])=="-deuteron")
+            deuteron=true;
         else if (string(argv[i]).substr(0,1)=="-")
         {
             cerr << "Unrecoginzed parameter " << argv[i] << endl;
@@ -129,7 +137,6 @@ int main(int argc, char* argv[])
         pdf = new CTEQ();
         pdf->Initialize();
     }
-   
     /*if (pt1*std::exp(y1) < pt2*std::exp(y2))
     {
         cerr <<"pt1*exp(y1) < pt2*exp(y2) " << endl;
@@ -160,6 +167,8 @@ int main(int argc, char* argv[])
         cout <<"# Parton distribution function used: " << pdf->GetString() << endl;
     else
         cout <<"# Not multiplying by PDF" << endl;
+    if (deuteron) cout << "# Probe is deuteron" << endl;
+   else cout <<"# Probe is proton" << endl;
     cout <<"# Quark mass: " << cross_section.M_Q() << " GeV" << endl;
 
     cout << "# pt1=" << pt1 <<", pt2=" << pt2 <<", y1=" << y1 <<", y2=" << y2 <<
@@ -180,9 +189,11 @@ int main(int argc, char* argv[])
     double normalization = 1;//cross_section.Sigma(pt1, pt2, y1, y2, sqrts);
     //cout << "# Normalization totxs " << normalization << endl;
     //cout << "# Theta=2.5 " << cross_section.dSigma(pt1,pt2,y1,y2,2.5,sqrts) << endl;
-    int points=20;
+    //int points=20;
+    int points=5;
     if (phi>-0.5) points=1;    // calculate only given angle
-    double maxphi=2.0*M_PI-1;
+    //double maxphi=2.0*M_PI-1;
+    double maxphi=M_PI;
     double minphi = 1;
     bool fftw=false;
 
@@ -194,7 +205,7 @@ int main(int argc, char* argv[])
         cerr <<"Can't calculate FFT and multiply by PDF!" << endl;
 
     if (!fftw and false)
-        cross_section.LoadPtData();
+        cross_section.LoadPtData(y1,y2);
 
     int ready=0;
     #pragma omp parallel for
@@ -216,8 +227,9 @@ int main(int argc, char* argv[])
         }
         
         if (!fftw)
-            //result = cross_section.dSigma_full(pt1,pt2,y1,y2,theta,sqrts);
-            result = cross_section.dSigma(pt1,pt2,y1,y2,theta,sqrts,multiply_pdf);
+            result = cross_section.dSigma_integrated(2, 1, 2.4, 4, theta, sqrts, deuteron);
+            //result = cross_section.dSigma_full(pt1,pt2,y1,y2,theta,sqrts, deuteron);
+            //result = cross_section.dSigma(pt1,pt2,y1,y2,theta,sqrts,multiply_pdf);
                 //+ cross_section.dSigma(pt2,pt1,y2,y1,theta,sqrts,multiply_pdf);
         else
             result = cross_section.CorrectionTerm_fft(pt1, pt2, ya, theta);

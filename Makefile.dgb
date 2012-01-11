@@ -3,14 +3,12 @@ LDFLAGS = `gsl-config --libs` -lm -lfftw3
 
 include filelist.m
 
-all: rbk
-
-rbk: $(OBJECTS) $(COBJECTS) $(FOBJECTS) 
+azcorrel: $(OBJECTS) $(COBJECTS) $(FOBJECTS) 
 	g++ $(CXXFLAGS) $(LDFLAGS) $(OBJECTS) ../amplitudelib/libamplitude.a -lgfortran -o azcorrel
 .cpp.o:
 	 g++ $(CXXFLAGS) $< -c -o $@
 .c.o:
-	gcc $(CXXFLAGS) $< -c -o $@
+	mpicc $(CXXFLAGS) $< -c -o $@
 .f.o:
 	gfortran -g -c $< -c -o $@
 

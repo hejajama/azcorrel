@@ -7,14 +7,15 @@
 #include <gsl/gsl_sf_bessel.h>
 #include <cmath>
 #include <ctime>
-#include <mpi.h>
 #include "config.hpp"
+#ifdef USE_MPI
+    #include <mpi.h>
 
 extern "C"
 {
     #include "pvegas/vegas.h"
 }
-
+#endif
 
 using std::cos;
 using std::sin;
@@ -42,8 +43,8 @@ double Inthelperf_correction2(double* vec, size_t dim, void* p);
 void pVegas_wrapper(double x[6], double f[1], void* par);
 double NormalizeAngle(double phi);
 
-bool cyrille=false;
-bool correction=true;
+bool cyrille=true;
+bool correction=false;
 
 /*
  * Calculates the correction term/full integral over 6-dim. hypercube
@@ -53,8 +54,14 @@ double CrossSection2::CorrectionTerm(double pt1, double pt2, double ya, double p
         double z)
 
 {
-    cout << "# Starting MC integral, marquet: " << cyrille << ", correction: " << correction << endl;
     std::time_t start = std::time(NULL);
+    #ifdef USE_MPI
+    int id;
+    MPI_Comm_rank(MPI_COMM_WORLD, &id);
+    if(id==0) 
+    #endif
+    cout << "# Starting MC integral, marquet: " << cyrille << ", correction: " << correction << endl;
+
 
     if (!N->InterpolatorInitialized(ya))
         cerr << "Interpolator is not initialized for y=" << ya << "!!!" << endl;
@@ -232,7 +239,6 @@ double CrossSection2::CorrectionTerm(double pt1, double pt2, double ya, double p
 
     /// MPI & PVEGAS
     #ifdef USE_MPI
-    
     double estim[1];   // estimators for integrals 
     double std_dev[1]; // standard deviations              
     double chi2a[1];   // chi^2/n       
@@ -255,25 +261,29 @@ double CrossSection2::CorrectionTerm(double pt1, double pt2, double ya, double p
     
     // set up the grid (init = 0) with 5 iterations of 1000 samples,
     // no need to compute additional accumulators (fcns = 1),
-    // no parallelization yet (wrks = 1). 
+    // no parallelization yet (wrks = 1).
     vegas(reg, dim, pVegas_wrapper,
-        0, 100000, 5, NPRN_INPUT | NPRN_RESULT,
+        0, mcintpoints/100, 5, NPRN_INPUT | NPRN_RESULT,
         functions, 0, 1,
         estim, std_dev, chi2a, &helper);
       // refine the grid (init = 1) with 5 iterations of 10000 samples,
       // collect in additional accumulators (fcns = FUNCTIONS),
       // two parallel workers (wrks = 2). 
       vegas(reg, dim, pVegas_wrapper,
-            1, 1000000, 5, NPRN_INPUT | NPRN_RESULT,
+            1, mcintpoints/10, 5, NPRN_INPUT | NPRN_RESULT,
             functions, 0, 2,
             estim, std_dev, chi2a, &helper);
-      // final sample, inheriting previous results (init = 2) 
-      vegas(reg, dim, pVegas_wrapper,
+      // final sample, inheriting previous results (init = 2)
+    if (id==0)
+      cout <<"# Constants: " << constants << endl;
+    vegas(reg, dim, pVegas_wrapper,
             2, mcintpoints, 2, NPRN_INPUT | NPRN_RESULT,
             functions, 0,  workers,
             estim, std_dev, chi2a, &helper);
 
-      printf ("# Result: %g +/- %g\n", estim[0], std_dev[0]);
+    if (id==0)
+      cout << "# Result: " << estim[0] << " +/- " << std_dev[0] << " time "
+       << (std::time(NULL)-start)/60.0/60.0 << " h"<< endl;
 
     res = estim[0]*constants;
     #endif
