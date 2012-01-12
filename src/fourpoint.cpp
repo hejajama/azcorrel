@@ -43,8 +43,8 @@ double Inthelperf_correction2(double* vec, size_t dim, void* p);
 void pVegas_wrapper(double x[6], double f[1], void* par);
 double NormalizeAngle(double phi);
 
-bool cyrille=true;
-bool correction=false;
+bool cyrille=false;
+bool correction=true;
 
 /*
  * Calculates the correction term/full integral over 6-dim. hypercube
@@ -261,30 +261,38 @@ double CrossSection2::CorrectionTerm(double pt1, double pt2, double ya, double p
     
     // set up the grid (init = 0) with 5 iterations of 1000 samples,
     // no need to compute additional accumulators (fcns = 1),
-    // no parallelization yet (wrks = 1).
+    if (id==0)
+     cout <<"# Constants: " << constants << endl;
     vegas(reg, dim, pVegas_wrapper,
         0, mcintpoints/100, 5, NPRN_INPUT | NPRN_RESULT,
-        functions, 0, 1,
+        functions, 0, workers,
         estim, std_dev, chi2a, &helper);
+
       // refine the grid (init = 1) with 5 iterations of 10000 samples,
-      // collect in additional accumulators (fcns = FUNCTIONS),
-      // two parallel workers (wrks = 2). 
+      // collect in additional accumulators (fcns = FUNCTIONS),    
       vegas(reg, dim, pVegas_wrapper,
             1, mcintpoints/10, 5, NPRN_INPUT | NPRN_RESULT,
-            functions, 0, 2,
+            functions, 0, workers,
             estim, std_dev, chi2a, &helper);
       // final sample, inheriting previous results (init = 2)
-    if (id==0)
-      cout <<"# Constants: " << constants << endl;
     vegas(reg, dim, pVegas_wrapper,
             2, mcintpoints, 2, NPRN_INPUT | NPRN_RESULT,
             functions, 0,  workers,
             estim, std_dev, chi2a, &helper);
 
     if (id==0)
-      cout << "# Result: " << estim[0] << " +/- " << std_dev[0] << " time "
+    {
+      cout << "# phi=" << phi << " result: " << estim[0] << " +/- " << std_dev[0]
+        << " relerr " << std_dev[0]/estim[0] << " time "
        << (std::time(NULL)-start)/60.0/60.0 << " h"<< endl;
 
+        if (std_dev[0]/estim[0] > 0.1)
+        {
+            cout << "#!!!!!!!!!!!!!!! INTEGRAL DOESN'T CONVERGE!?!?!?" << endl;
+        }
+
+    }
+    
     res = estim[0]*constants;
     #endif
 
@@ -489,6 +497,7 @@ double Inthelperf_correction2(double* vec, size_t dim, void* p)
     // Amplitudes
     double s_u1=N->S(u1, y);
     double s_u2=N->S(u2,y);
+    double s_r=N->S(r,y);
 
 
 
@@ -505,7 +514,7 @@ double Inthelperf_correction2(double* vec, size_t dim, void* p)
              * s_u2
             + std::cos(-pt1_dot_r - pt2_dot_r + (1.0-z)*(pt1_dot_u2 - pt1_dot_u1)
                 - z*(pt2_dot_u2 - pt2_dot_u1) )
-            ) * N->S(r, y);
+            ) * s_r;
     }
 
 
@@ -555,6 +564,31 @@ double Inthelperf_correction2(double* vec, size_t dim, void* p)
             result -=correction;
         }
     }
+    
+    /*
+    if (correction)
+    {
+        double cor=0;
+        // r - u2
+        double r_m_u2 = std::sqrt(SQR(r) + SQR(u2) - 2.0*u2_dot_r);
+        // r+u
+        double r_p_u1 = std::sqrt(SQR(r)+SQR(u1) + 2.0*u1_dot_r);
+        // r+u-u2
+        double r_p_u1_m_u2 = std::sqrt(SQR(r) + (SQR(u1)+SQR(u2)-2.0*u1_dot_u2)
+                            + 2.0*(u1_dot_r - u2_dot_r) );
+        double s_r_p_u1_m_u2 = N->S(r_p_u1_m_u2, y);
+
+        double f1 = N->S(r_m_u2,y)*N->S(r_p_u1, y)/(s_r*s_r_p_u1_m_u2);
+        double f2 = s_u1*s_u2/(s_r*s_r_p_u1_m_u2);
+
+        double loglog = std::log(f1)/std::log(f2);
+        if (isinf(loglog) or isnan(loglog))
+            cor=0;
+        else
+            cor = s_r_p_u1_m_u2 * loglog;
+        result -= cor*std::cos( -pt2_dot_r - pt1_dot_r - pt1_dot_u1 + pt1_dot_u2 );
+
+    }*/
 
   
     

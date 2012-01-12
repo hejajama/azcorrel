@@ -9,6 +9,7 @@
 #include <cmath>
 #include <gsl/gsl_errno.h>
 #include <sstream>
+#include <fstream>
 
 #include "config.hpp"
 #ifdef USE_MPI
@@ -41,6 +42,7 @@ int main(int argc, char* argv[])
         cout << "-mcintpoints points" << endl;
         cout << "-mq quark_mass in GeV" << endl;
         cout << "-deuteron: use deuteron as a probe" << endl;
+        cout << "-output_file filename" << endl;
         return 0;
     }
 
@@ -65,7 +67,9 @@ int main(int argc, char* argv[])
 
 
     gsl_set_error_handler(&ErrHandler);
-    std::string filename="amplitude.dat";
+    std::string amplitude_filename="amplitude.dat";
+
+    std::string output_file="";
     
 
     double y1=3.5; double y2=2; double pt1=5; double pt2=3; double sqrts=200;
@@ -92,7 +96,7 @@ int main(int argc, char* argv[])
         else if (string(argv[i])=="-phi")
             phi = StrToReal(argv[i+1]);
         else if (string(argv[i])=="-amplitude")
-            filename = argv[i+1];
+            amplitude_filename = argv[i+1];
         else if (string(argv[i])=="-pdf")
             Q=StrToReal(argv[i+1]);
         else if (string(argv[i])=="-nopdf")
@@ -125,6 +129,8 @@ int main(int argc, char* argv[])
         }
         else if (string(argv[i])=="-deuteron")
             deuteron=true;
+        else if (string(argv[i])=="-output_file")
+            output_file = argv[i+1];
         else if (string(argv[i]).substr(0,1)=="-")
         {
             cerr << "Unrecoginzed parameter " << argv[i] << endl;
@@ -150,7 +156,7 @@ int main(int argc, char* argv[])
         delete pdf;
         return 0;
     }
-    AmplitudeLib amplitude(filename);
+    AmplitudeLib amplitude(amplitude_filename);
     KKP fragmentation;
 
     CrossSection2 cross_section(&amplitude, pdf, &fragmentation);
@@ -158,28 +164,37 @@ int main(int argc, char* argv[])
     cross_section.SetM_Q(mq);
     double ya=std::log(amplitude.X0() / cross_section.xa(pt1,pt2,y1,y2,sqrts));
 
+    std::ofstream output;
     #ifdef USE_MPI
     if (id==0)
     {
     #endif
+    if (output_file!="")
+        output.open(output_file.c_str());
+
+    std::stringstream infostr;
 
     if (multiply_pdf)
-        cout <<"# Parton distribution function used: " << pdf->GetString() << endl;
+        infostr << "# Parton distribution function used: " << pdf->GetString() << endl;
     else
-        cout <<"# Not multiplying by PDF" << endl;
-    if (deuteron) cout << "# Probe is deuteron" << endl;
-   else cout <<"# Probe is proton" << endl;
-    cout <<"# Quark mass: " << cross_section.M_Q() << " GeV" << endl;
+        infostr <<"# Not multiplying by PDF" << endl;
+    if (deuteron) infostr << "# Probe is deuteron" << endl;
+    else infostr <<"# Probe is proton" << endl;
+    infostr <<"# Quark mass: " << cross_section.M_Q() << " GeV" << endl;
 
-    cout << "# pt1=" << pt1 <<", pt2=" << pt2 <<", y1=" << y1 <<", y2=" << y2 <<
+    infostr << "# pt1=" << pt1 <<", pt2=" << pt2 <<", y1=" << y1 <<", y2=" << y2 <<
     " y_A=" << ya << endl;
-    cout << "# x1=" << pt1*std::exp(y1)/sqrts << ", x2=" << pt2*std::exp(y2)/sqrts
+    infostr << "# x1=" << pt1*std::exp(y1)/sqrts << ", x2=" << pt2*std::exp(y2)/sqrts
         << " sqrts=" << sqrts << endl;
-    cout << "# z=" << cross_section.z(pt1,pt2,y1,y2) <<", 1-z=" << cross_section.z(pt2,pt1,y2,y1)
+    infostr << "# z=" << cross_section.z(pt1,pt2,y1,y2) <<", 1-z=" << cross_section.z(pt2,pt1,y2,y1)
     << " xa=" << cross_section.xa(pt1,pt2,y1,y2,sqrts)
     << " xh=" << cross_section.xh(pt1,pt2,y1,y2,sqrts) << endl;
-    cout << "# Q_s = " << 1.0/amplitude.SaturationScale(ya, 0.22) << " GeV " << endl;
-    cout << "# MC Integration points " << mcintpoints << endl;
+    infostr << "# Q_s = " << 1.0/amplitude.SaturationScale(ya, 0.22) << " GeV " << endl;
+    infostr << "# MC Integration points " << mcintpoints << endl;
+
+    cout << infostr.str();
+    if (output_file!="")
+        output << infostr.str();
 
     #ifdef USE_MPI
     }
@@ -189,12 +204,12 @@ int main(int argc, char* argv[])
     double normalization = 1;//cross_section.Sigma(pt1, pt2, y1, y2, sqrts);
     //cout << "# Normalization totxs " << normalization << endl;
     //cout << "# Theta=2.5 " << cross_section.dSigma(pt1,pt2,y1,y2,2.5,sqrts) << endl;
-    //int points=20;
-    int points=5;
+    int points=10;
+    //int points=5;
     if (phi>-0.5) points=1;    // calculate only given angle
     //double maxphi=2.0*M_PI-1;
     double maxphi=M_PI;
-    double minphi = 1;
+    double minphi = 0.5;
     bool fftw=false;
 
     // FFTW
@@ -227,9 +242,9 @@ int main(int argc, char* argv[])
         }
         
         if (!fftw)
-            result = cross_section.dSigma_integrated(2, 1, 2.4, 4, theta, sqrts, deuteron);
+            //result = cross_section.dSigma_integrated(2, 1, 2.4, 4, theta, sqrts, deuteron);
             //result = cross_section.dSigma_full(pt1,pt2,y1,y2,theta,sqrts, deuteron);
-            //result = cross_section.dSigma(pt1,pt2,y1,y2,theta,sqrts,multiply_pdf);
+            result = cross_section.dSigma(pt1,pt2,y1,y2,theta,sqrts,multiply_pdf);
                 //+ cross_section.dSigma(pt2,pt1,y2,y1,theta,sqrts,multiply_pdf);
         else
             result = cross_section.CorrectionTerm_fft(pt1, pt2, ya, theta);
@@ -243,11 +258,19 @@ int main(int argc, char* argv[])
         {
             #ifdef USE_MPI
             if (id==0)
+            {
             #endif
-            cout << theta << " " << result/normalization << " "
-            << cross_section.dSigma_lo(pt1, pt2, y1, y2, theta, sqrts, multiply_pdf) << " "
+            std::stringstream tmp_out;
+            tmp_out << theta << " " << result/normalization << " "
+                << cross_section.dSigma_lo(pt1, pt2, y1, y2, theta, sqrts, multiply_pdf) << " "
                 //<< cross_section.CorrectionTerm_fft(pt1,pt2, ya, theta)
                 << endl;
+            cout << tmp_out.str();
+            if (output_file!="")
+                output << tmp_out.str();
+            #ifdef USE_MPI
+            }
+            #endif
         }
         
     }
@@ -258,6 +281,13 @@ int main(int argc, char* argv[])
     #ifdef USE_MPI
     //if (id==0)
         MPI_Finalize();
+    if (id==0)
+    {
+    #endif
+        if (output_file!="")
+            output.close();
+    #ifdef USE_MPI
+    }
     #endif
 
     return 0;

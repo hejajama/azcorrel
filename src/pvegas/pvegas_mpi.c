@@ -176,7 +176,7 @@ void gfsr_init(long seed)
 {
   int i;
  
-  if (p_rank==0) printf("Initializing SR-sequences with seed %ld\n",seed);
+  if (p_rank==0) printf("# Initializing SR-sequences with seed %ld\n",seed);
   gfsr_norm = (double)(1/(pow(2.0,(long double)(8*sizeof(int))) - 1));
   rdum = (unsigned int)seed;
 #if (REPRO == 0)
@@ -457,7 +457,7 @@ void vegas(double regn[], int ndim, void (*fxn)(double x[], double f[], void* p)
     if (!p_rank && nprn & NPRN_INPUT) {
       printf("%s:  ndim= %3d  ncall= %8.0f   %3d+1/%3d CPU(s)\n",
              " Input parameters for vegas",ndim,calls,wrks,p_size);
-      printf("%28s  ittot=%5d  itmx=%5d    %5d^%1d hypercubes\n"," ",ittot,itmx,ng,ndim_par);
+      printf("% 28s  ittot=%5d  itmx=%5d    %5d^%1d hypercubes\n"," ",ittot,itmx,ng,ndim_par);
       printf("%28s  nprn=0x%04x  ALPH=%5.2f\n"," ",nprn,ALPH);
       printf("%28s  mds=%3d  nd=%4d%15s npg=%d\n"," ",mds,nd," ",npg);
       for (j=0; j<ndim; j++) {
@@ -558,25 +558,25 @@ void vegas(double regn[], int ndim, void (*fxn)(double x[], double f[], void* p)
     }
     wgt = Ai[0].Wgt;
     if (!p_rank && nprn & NPRN_RESULT) {
-      printf("%s %3d : integral = %14.7g +/-  %9.2g\n",
+      printf("# %s %3d : integral = %14.7g +/-  %9.2g\n",
              " iteration no.",it,Ab[0].ti,Ab[0].tsi);
-      printf("%s integral =%14.7g+/-%9.2g  chi^2/IT n = %9.2g\n",
+      printf("# %s integral =%14.7g+/-%9.2g  chi^2/IT n = %9.2g\n",
              " all iterations:  ",tgral[0],sd[0],chi2a[0]);
     }
     if (!p_rank && nprn & NPRN_SECRES) {
       for (i=1; i<functions; i++) {
-        printf("   %4d%s%14.7g+/-%9.2g  chi^2/IT n = %9.2g\n",
+        printf("#   %4d%s%14.7g+/-%9.2g  chi^2/IT n = %9.2g\n",
                i,".additional integral= ",tgral[i],sd[i],chi2a[i]);
       }
     }
     if (!p_rank && nprn & (NPRN_GRID | NPRN_GRID_2 | NPRN_GRID_4 | NPRN_GRID_8)) {
       for (j=0; j<ndim; j++) {
-        printf(" data for axis  %2d\n",j);
-        printf("%6s%13s%11s%13s%11s%13s\n", 
+        printf("# data for axis  %2d\n",j);
+        printf("# %6s%13s%11s%13s%11s%13s\n", 
                "X","delta i","X","delta i","X","delta i");
         for (i=0; i<nd; i += 3) {
           for (k=0; k<3 && i+k<nd; k++) {
-            printf("%8.5f%12.4g    ",xi[j][i+k],di[i+k][j]);
+            printf(" %8.5f%12.4g    ",xi[j][i+k],di[i+k][j]);
           }
           printf("\n");
           if (nprn & NPRN_GRID_8) k = 3*(8-1);

@@ -129,10 +129,10 @@ double CrossSection2::dSigma(double pt1, double pt2, double y1, double y2, doubl
 
     // CorrectionTerm returns -1 if the integral doesn't converge
     
-    //double correction = CorrectionTerm(pt1,pt2,ya,phi,tmpz);
+    double correction = CorrectionTerm(pt1,pt2,ya,phi,tmpz);
     //if (std::abs(correction+1.0)<0.001) return -1;
    	//result +=correction;
-    //result = correction;
+    result = correction;
     
     /*result = CorrectionTerm_fft(pt1, pt2, ya, phi);
     #pragma omp critical
@@ -274,7 +274,7 @@ int CrossSection2::LoadPtData(double y1, double y2)
        for (int pt2ind=0; pt2ind<points; pt2ind++)
        {
             std::stringstream fname;
-            fname << "taulukko_pt_y/pt1_" << ptstrings[pt1ind] << "_pt2_"
+            fname << "taulukko_pt_y_pp/pt1_" << ptstrings[pt1ind] << "_pt2_"
                 << ptstrings[pt2ind] << "_y1_" << y1str << "_y2_" << y2str;
             //cout << "# Loading file " << fname.str() << endl;
             std::ifstream file(fname.str().c_str());

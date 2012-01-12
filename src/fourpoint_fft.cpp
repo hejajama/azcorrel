@@ -22,8 +22,8 @@ const double R_RANGE = 23;
 
 const bool READFILE = false; // Read integrand from a file
 
-bool fftw_cyrille=false;
-bool fftw_correction=true;
+bool fftw_cyrille=true;
+bool fftw_correction=false;
 
 void CrossSection2::CalculateCorrection_fft(double ya, double z)
 {
@@ -207,7 +207,7 @@ void CrossSection2::CalculateCorrection_fft(double ya, double z)
                             data[index4]=result;
                             done++;
                             if (done % 100 == 0)
-                                cerr << " # done " << done << "/" << std::pow(Nd, 4)/4
+                                cerr << " # done " << done << "/" << std::pow((float)Nd, 4)/4
                                     << " (approximation)" << endl;
                             if (data[index].real() != 0 or data[index].imag()!=0)
                             {
