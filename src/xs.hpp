@@ -12,6 +12,7 @@
 #include <pdf/pdf.hpp>
 #include <amplitudelib/amplitudelib.hpp>
 #include <fragmentation/fragmentation.hpp>
+#include <tools/interpolation2d.hpp>
 
 class CrossSection2
 {
@@ -48,7 +49,7 @@ class CrossSection2
         PDF* Pdf();
         FragmentationFunction* FragFun();
 
-        void SetMCIntPoints(size_t points);
+        void SetMCIntPoints(unsigned long long points);
 
         void SetM_Q(double mq);
         double M_Q();
@@ -70,10 +71,12 @@ class CrossSection2
         double delta;
 
         double V2int(double rx, double ry, double v1x, double v1y, double y, double z);
-        size_t mcintpoints;
+        unsigned long long mcintpoints;
 
         // [pt1ind][pt2ind]
         std::vector<std::vector< Interpolator*> > ptinterpolators;
+        Interpolator2D *ptinterpolator2d;
+        Interpolator2D *ptinterpolator2d_rev;
 
         std::vector<double> ptvals;
         std::vector<std::string> ptstrings;

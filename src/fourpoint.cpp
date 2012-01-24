@@ -43,8 +43,8 @@ double Inthelperf_correction2(double* vec, size_t dim, void* p);
 void pVegas_wrapper(double x[6], double f[1], void* par);
 double NormalizeAngle(double phi);
 
-bool cyrille=false;
-bool correction=true;
+bool cyrille=true; 
+bool correction=false;
 
 /*
  * Calculates the correction term/full integral over 6-dim. hypercube
@@ -97,7 +97,7 @@ double CrossSection2::CorrectionTerm(double pt1, double pt2, double ya, double p
     */
     
 
-    size_t calls = mcintpoints;
+    unsigned long long calls = mcintpoints;
 
     const gsl_rng_type *T = gsl_rng_default;
     //gsl_rng_env_setup();
@@ -258,28 +258,55 @@ double CrossSection2::CorrectionTerm(double pt1, double pt2, double ya, double p
     reg[dim]=maxr; reg[dim+1]=maxr; reg[dim+2]=maxr;
     reg[3]=0; reg[4]=0; reg[5]=0;
     reg[dim+3]=2.0*M_PI; reg[dim+4]=2.0*M_PI; reg[dim+5]=2.0*M_PI;
+
+    time_t t;
+    time(&t);
     
     // set up the grid (init = 0) with 5 iterations of 1000 samples,
     // no need to compute additional accumulators (fcns = 1),
     if (id==0)
-     cout <<"# Constants: " << constants << endl;
+    {
+        cout <<"# Constants: " << constants << endl;
+        cout << "# First round at " << std::ctime(&t) ;
+    }
     vegas(reg, dim, pVegas_wrapper,
-        0, mcintpoints/100, 5, NPRN_INPUT | NPRN_RESULT,
+        0, mcintpoints/100, 5,  NPRN_RESULT,
         functions, 0, workers,
         estim, std_dev, chi2a, &helper);
 
-      // refine the grid (init = 1) with 5 iterations of 10000 samples,
-      // collect in additional accumulators (fcns = FUNCTIONS),    
-      vegas(reg, dim, pVegas_wrapper,
-            1, mcintpoints/10, 5, NPRN_INPUT | NPRN_RESULT,
+      // refine the grid (init = 1) 
+      // collect in additional accumulators (fcns = FUNCTIONS),
+      time(&t);
+    if (id==0)
+        cout << "# 2nd round at " << std::ctime(&t);  
+    vegas(reg, dim, pVegas_wrapper,
+            1, mcintpoints/10, 5, NPRN_RESULT,
             functions, 0, workers,
             estim, std_dev, chi2a, &helper);
       // final sample, inheriting previous results (init = 2)
+    time(&t);
+    if (id==0)
+        cout << "# 3rd round at " << std::ctime(&t) ;  
     vegas(reg, dim, pVegas_wrapper,
-            2, mcintpoints, 2, NPRN_INPUT | NPRN_RESULT,
+            2, mcintpoints, 2,   NPRN_RESULT,
             functions, 0,  workers,
             estim, std_dev, chi2a, &helper);
-
+/*
+    if (std_dev[0]/estim[0]>0.07)
+    {
+        cout <<"# phi=" << phi <<", relerr " << std_dev[0]/estim[0] <<", trying "
+            <<"to increase number of MCpoitns to "<< mcintpoints*5 << endl;
+        vegas(reg, dim, pVegas_wrapper,
+            1, mcintpoints/2, 5, NPRN_RESULT,
+            functions, 0, workers,
+            estim, std_dev, chi2a, &helper);
+        // final sample, inheriting previous results (init = 2)
+        vegas(reg, dim, pVegas_wrapper,
+            2, mcintpoints*5, 2, NPRN_RESULT,
+            functions, 0,  workers,
+            estim, std_dev, chi2a, &helper);
+    }
+*/
     if (id==0)
     {
       cout << "# phi=" << phi << " result: " << estim[0] << " +/- " << std_dev[0]
@@ -289,9 +316,15 @@ double CrossSection2::CorrectionTerm(double pt1, double pt2, double ya, double p
         if (std_dev[0]/estim[0] > 0.1)
         {
             cout << "#!!!!!!!!!!!!!!! INTEGRAL DOESN'T CONVERGE!?!?!?" << endl;
+            cerr <<"INTEGRLA DOESN'T CONVERTE! phi=" << phi
+                << " result: " << estim[0] << " +/- " << std_dev[0]
+                << " relerr " << std_dev[0]/estim[0] << " pt1 " << pt1 << " pt2 "
+                << pt2 << " z " << z << endl;
         }
 
     }
+
+    
     
     res = estim[0]*constants;
     #endif
@@ -507,8 +540,8 @@ double Inthelperf_correction2(double* vec, size_t dim, void* p)
     if (cyrille)
     {
         result = (std::cos(-pt1_dot_r - pt2_dot_r - pt2_dot_u2 + pt2_dot_u1)
-            * s_u1*s_u2 -
-            std::cos(-pt1_dot_r - pt2_dot_r + pt2_dot_u1 + (1.0-z)*pt1_dot_u2-z*pt2_dot_u2)
+            * s_u1*s_u2
+            - std::cos(-pt1_dot_r - pt2_dot_r + pt2_dot_u1 + (1.0-z)*pt1_dot_u2-z*pt2_dot_u2)
              * s_u1
             - std::cos(-pt1_dot_r - pt2_dot_r - pt2_dot_u2 - (1.0-z)*pt1_dot_u1 + z*pt2_dot_u1)
              * s_u2
@@ -643,7 +676,7 @@ void pVegas_wrapper(double x[6], double f[1], void* par)
 
 
 
-void CrossSection2::SetMCIntPoints(size_t points)
+void CrossSection2::SetMCIntPoints(unsigned long long points)
 {
     mcintpoints=points;
 }

@@ -1,6 +1,6 @@
-CXXFLAGS = `gsl-config --cflags` -O3 -Wall -pedantic -fopenmp -I ../amplitudelib# -I ./libbci-1.1.0/ 
+CXXFLAGS = `gsl-config --cflags` -Wno-long-long  -O3 -Wall -pedantic -fopenmp -I ../amplitudelib# -I ./libbci-1.1.0/ 
 LDFLAGS = `gsl-config --libs` -lm -lfftw3 -lgfortran -lpthread #-L../amplitudelib/ -lamplitude 
-CFLAGS = -O2 -D_REENTRANT
+CFLAGS = -O3 -D_REENTRANT -std=c99
 
 #CC = gcc
 #CXX = g++

@@ -10,6 +10,7 @@
 #include <gsl/gsl_errno.h>
 #include <sstream>
 #include <fstream>
+#include <limits>
 
 #include "config.hpp"
 #ifdef USE_MPI
@@ -78,7 +79,8 @@ int main(int argc, char* argv[])
     double mq=0.14;
     bool multiply_pdf=true;
     PDF *pdf=0;
-    size_t mcintpoints=1e7;
+    unsigned long long mcintpoints=1e7;
+    
     bool deuteron=false;   
 
     for (int i=1; i<argc; i++)
@@ -190,7 +192,8 @@ int main(int argc, char* argv[])
     << " xa=" << cross_section.xa(pt1,pt2,y1,y2,sqrts)
     << " xh=" << cross_section.xh(pt1,pt2,y1,y2,sqrts) << endl;
     infostr << "# Q_s = " << 1.0/amplitude.SaturationScale(ya, 0.22) << " GeV " << endl;
-    infostr << "# MC Integration points " << mcintpoints << endl;
+    infostr << "# MC Integration points " << mcintpoints << " / supported: "
+        << std::numeric_limits<unsigned long long>::max() << endl;
 
     cout << infostr.str();
     if (output_file!="")
@@ -205,9 +208,9 @@ int main(int argc, char* argv[])
     //cout << "# Normalization totxs " << normalization << endl;
     //cout << "# Theta=2.5 " << cross_section.dSigma(pt1,pt2,y1,y2,2.5,sqrts) << endl;
     int points=10;
-    //int points=5;
+    //int points=50;
     if (phi>-0.5) points=1;    // calculate only given angle
-    //double maxphi=2.0*M_PI-1;
+    //double maxphi=2.0*M_PI-0.5;
     double maxphi=M_PI;
     double minphi = 0.5;
     bool fftw=false;
@@ -243,9 +246,11 @@ int main(int argc, char* argv[])
         
         if (!fftw)
             //result = cross_section.dSigma_integrated(2, 1, 2.4, 4, theta, sqrts, deuteron);
+                /*+ cross_section.dSigma_integrated(2,1,3.2,2.4, theta, sqrts, deuteron); 
+            */
             //result = cross_section.dSigma_full(pt1,pt2,y1,y2,theta,sqrts, deuteron);
             result = cross_section.dSigma(pt1,pt2,y1,y2,theta,sqrts,multiply_pdf);
-                //+ cross_section.dSigma(pt2,pt1,y2,y1,theta,sqrts,multiply_pdf);
+            //    + cross_section.dSigma(pt2,pt1,y2,y1,theta,sqrts,multiply_pdf);
         else
             result = cross_section.CorrectionTerm_fft(pt1, pt2, ya, theta);
         /*if (result<-0.5)
@@ -262,7 +267,7 @@ int main(int argc, char* argv[])
             #endif
             std::stringstream tmp_out;
             tmp_out << theta << " " << result/normalization << " "
-                << cross_section.dSigma_lo(pt1, pt2, y1, y2, theta, sqrts, multiply_pdf) << " "
+                //<< cross_section.dSigma_lo(pt1, pt2, y1, y2, theta, sqrts, multiply_pdf) << " "
                 //<< cross_section.CorrectionTerm_fft(pt1,pt2, ya, theta)
                 << endl;
             cout << tmp_out.str();

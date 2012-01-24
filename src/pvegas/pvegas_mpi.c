@@ -5,7 +5,7 @@
  *
  * SYNOPSIS
  *   void vegas(double regn[], int ndim, void (*fxn)(double x[], double f[]),
- *              int init, unsigned long ncall, int itmx, int nprn,
+ *              int init, unsigned long , int itmx, int nprn,
  *              int fcns, int pdim, int wrks,
  *              double tgral[], double sd[], double chi2a[]);
  *
@@ -83,7 +83,7 @@
 #define TINY 1.0e-68         /* small, since we are in double-precision      */
 #define MXWORK 511           /* no more than MXWORK+1 CPUs, please           */
 #define NDIM_PAR 0           /* 0 = auto-determination of parallel-space     */
-#define REPRO 1              /* 0 = default, others used for comparison      */
+#define REPRO 0              /* 0 = default, others used for comparison      */
 
 static int mds;              /* ==1: statified smpl. (see README)  (mds)     */
 int nd;                      /* slices in grid (c.f. NDMX)         (nd)      */
@@ -229,7 +229,7 @@ void* p_vegasloop(void *par)
     double f2;               /* f squared                          (f2)      */
     double fb;               /* sum for f within bin               (fb)      */
     double f2b;              /* sum for f2 within bin              (f2b)     */
-    unsigned long npg;       /* number of calls within bin f != 0            */
+    unsigned long long npg;       /* number of calls within bin f != 0            */
   } pointAccu;               /* accumulator over points x within bins...     */
   pointAccu Ax[FNMX];   /* ...one for each integrand                    */
   double f[FNMX];       /* array passed into fxn for evaluation at x    */
@@ -356,14 +356,14 @@ void* p_vegasloop(void *par)
  * in vegas, except that workers specifies the degree of parallelization.
  */
 void vegas(double regn[], int ndim, void (*fxn)(double x[], double f[], void* p),
-           int init, unsigned long ncall, int itmx, int nprn,
+           int init, unsigned long long ncall, int itmx, int nprn,
            int fcns, int pdim, int wrks,
            double tgral[], double sd[], double chi2a[], void* par)
 {
   static int ndo;            /*                                    (ndo)     */
   int it;                    /* iteration counter                  (it)      */
   static int ittot;          /* iteration counter across init>1              */
-  double calls;              /* real total number of calls to fxn  (calls)   */
+  unsigned long long calls;              /* real total number of calls to fxn  (calls)   */
   double dv2g;               /*                                    (dv2g)    */
   double xin[NDMX];          /* aux. variable for rebinning        (xin[])   */
   typedef struct {
@@ -375,7 +375,7 @@ void vegas(double regn[], int ndim, void (*fxn)(double x[], double f[], void* p)
   static iterAccu Ai[FNMX];  /* ...one for each integrand                    */
   double dt[MXDIM];          /*                                    (dt[])    */
   double r[NDMX];            /*                                    (r[])     */
-  int i, j, k;               /* counters                           (i, j, k) */
+  unsigned long long i, j, k;               /* counters                           (i, j, k) */
   int whodunit;              /* who returned the result to master?           */
   double rc;                 /*                                    (rc)      */
   double xn;                 /*                                    (xn)      */
@@ -455,7 +455,7 @@ void vegas(double regn[], int ndim, void (*fxn)(double x[], double f[], void* p)
       ndo = nd;
     }
     if (!p_rank && nprn & NPRN_INPUT) {
-      printf("%s:  ndim= %3d  ncall= %8.0f   %3d+1/%3d CPU(s)\n",
+      printf("%s:  ndim= %3d  ncall= %llu   %3d+1/%3d CPU(s)\n",
              " Input parameters for vegas",ndim,calls,wrks,p_size);
       printf("% 28s  ittot=%5d  itmx=%5d    %5d^%1d hypercubes\n"," ",ittot,itmx,ng,ndim_par);
       printf("%28s  nprn=0x%04x  ALPH=%5.2f\n"," ",nprn,ALPH);
