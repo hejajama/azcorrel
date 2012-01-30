@@ -35,7 +35,7 @@ class CrossSection2
         double xh(double pt1, double pt2, double y1, double y2, double sqrts);
         double Delta(double pt1, double pt2, double theta);
 
-        int LoadPtData(double y1, double y2);
+        
         double dSigma_full(double pt1, double pt2, double y1, double y2, double phi,
             double sqrts, bool deuteron=false);
         double dSigma_integrated(double minpt1, double minpt2, double miny, double maxy,
@@ -49,7 +49,13 @@ class CrossSection2
         PDF* Pdf();
         FragmentationFunction* FragFun();
 
+        Interpolator2D *Ptinterpolator2d();
+        Interpolator2D *Ptinterpolator2d_rev();
+
         void SetMCIntPoints(unsigned long long points);
+
+        int LoadPtData(double y1, double y2);
+        void Prepare2DInterpolators(double phi);    // initialize ptinerpolator2d{,_rev}
 
         void SetM_Q(double mq);
         double M_Q();
@@ -75,6 +81,7 @@ class CrossSection2
 
         // [pt1ind][pt2ind]
         std::vector<std::vector< Interpolator*> > ptinterpolators;
+        std::vector<std::vector< Interpolator*> > ptinterpolators_rev;
         Interpolator2D *ptinterpolator2d;
         Interpolator2D *ptinterpolator2d_rev;
 

@@ -194,6 +194,7 @@ int main(int argc, char* argv[])
     infostr << "# Q_s = " << 1.0/amplitude.SaturationScale(ya, 0.22) << " GeV " << endl;
     infostr << "# MC Integration points " << mcintpoints << " / supported: "
         << std::numeric_limits<unsigned long long>::max() << endl;
+    infostr << "# Max pt when loading data: " << cross_section.MaxPt() << endl;
 
     cout << infostr.str();
     if (output_file!="")
@@ -207,8 +208,8 @@ int main(int argc, char* argv[])
     double normalization = 1;//cross_section.Sigma(pt1, pt2, y1, y2, sqrts);
     //cout << "# Normalization totxs " << normalization << endl;
     //cout << "# Theta=2.5 " << cross_section.dSigma(pt1,pt2,y1,y2,2.5,sqrts) << endl;
-    int points=10;
-    //int points=50;
+    //int points=10;
+    int points=40;
     if (phi>-0.5) points=1;    // calculate only given angle
     //double maxphi=2.0*M_PI-0.5;
     double maxphi=M_PI;
@@ -222,9 +223,9 @@ int main(int argc, char* argv[])
     if (fftw and multiply_pdf)
         cerr <<"Can't calculate FFT and multiply by PDF!" << endl;
 
-    if (!fftw and false)
+    /*if (!fftw and false)
         cross_section.LoadPtData(y1,y2);
-
+    */
     int ready=0;
     #pragma omp parallel for
     for (int i=0; i<points; i++)
@@ -245,11 +246,11 @@ int main(int argc, char* argv[])
         }
         
         if (!fftw)
-            //result = cross_section.dSigma_integrated(2, 1, 2.4, 4, theta, sqrts, deuteron);
+            result = cross_section.dSigma_integrated(2, 1, 2.4, 4, theta, sqrts, deuteron);
                 /*+ cross_section.dSigma_integrated(2,1,3.2,2.4, theta, sqrts, deuteron); 
             */
             //result = cross_section.dSigma_full(pt1,pt2,y1,y2,theta,sqrts, deuteron);
-            result = cross_section.dSigma(pt1,pt2,y1,y2,theta,sqrts,multiply_pdf);
+            //result = cross_section.dSigma(pt1,pt2,y1,y2,theta,sqrts,multiply_pdf);
             //    + cross_section.dSigma(pt2,pt1,y2,y1,theta,sqrts,multiply_pdf);
         else
             result = cross_section.CorrectionTerm_fft(pt1, pt2, ya, theta);

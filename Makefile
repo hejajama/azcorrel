@@ -1,6 +1,7 @@
-CXXFLAGS = `gsl-config --cflags` -Wno-long-long  -O3 -Wall -pedantic -fopenmp -I ../amplitudelib# -I ./libbci-1.1.0/ 
+CXXFLAGS = `gsl-config --cflags` -Wno-long-long  -O3 -Wall -pedantic -fopenmp -I ../amplitudelib 
 LDFLAGS = `gsl-config --libs` -lm -lfftw3 -lgfortran -lpthread #-L../amplitudelib/ -lamplitude 
-CFLAGS = -O3 -D_REENTRANT -std=c99
+CFLAGS = -D_REENTRANT -std=c99
+FORTRANFLAGS = 
 
 #CC = gcc
 #CXX = g++
@@ -20,7 +21,7 @@ azcorrel: $(OBJECTS) $(COBJECTS)
 .c.o:
 	$(CC) $(CXXFLAGS) $(CFLAGS) $< -c -o $@
 .f.o:
-	$(FOR) -c $< -c -o $@
+	$(FOR) $(FORTRANFLAGS) -c $< -c -o $@
 
 clean:
 	rm -f $(OBJECTS)

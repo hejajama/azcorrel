@@ -6,4 +6,4 @@
  * Heikki Mäntysaari <heikki.mantysaari@jyu.fi>, 2012
  */
 
-#define USE_MPI
+//#define USE_MPI

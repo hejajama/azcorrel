@@ -43,8 +43,8 @@ double Inthelperf_correction2(double* vec, size_t dim, void* p);
 void pVegas_wrapper(double x[6], double f[1], void* par);
 double NormalizeAngle(double phi);
 
-bool cyrille=true; 
-bool correction=false;
+bool cyrille=false; 
+bool correction=true;
 
 /*
  * Calculates the correction term/full integral over 6-dim. hypercube

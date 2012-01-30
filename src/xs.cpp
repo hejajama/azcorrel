@@ -108,8 +108,10 @@ double CrossSection2::dSigma(double pt1, double pt2, double y1, double y2, doubl
     // m=0
     if (M_Q() < 1e-5 )
     {
+        cout << "g: " << g << " f " << f << " kzdelta " << kzdeltasqr << " delta " << delta << " dotprod " << pt1*pt2*std::cos(phi) << " z " << tmpz << endl;
         result = SQR(g) + 1.0/kzdeltasqr + 2.0*g*( (1.0-tmpz)*pt1*pt2*std::cos(phi)
                     - tmpz*SQR(pt2) ) / ( pt2*kzdeltasqr );
+        cout <<"wo prefactor " << result << endl;
         result *= 2.0*(1.0+SQR(1.0-tmpz) );
     }
     else // m!= 0
@@ -140,10 +142,10 @@ double CrossSection2::dSigma(double pt1, double pt2, double y1, double y2, doubl
 
     // CorrectionTerm returns -1 if the integral doesn't converge
     
-    double correction = CorrectionTerm(pt1,pt2,ya,phi,tmpz);
+    //double correction = CorrectionTerm(pt1,pt2,ya,phi,tmpz);
     //if (std::abs(correction+1.0)<0.001) return -1;
    	//result +=correction;
-    result = correction;
+    //result = correction;
     
     /*result = CorrectionTerm_fft(pt1, pt2, ya, phi);
     #pragma omp critical
@@ -157,7 +159,7 @@ double CrossSection2::dSigma(double pt1, double pt2, double y1, double y2, doubl
         // Marquet's M w.o. S/(2\pi)^2
         return result;
     }
-    
+    cerr << "Multiplying by pdf, the scale is probably stupid\n";
     double tmpxh = xh(pt1, pt2, y1, y2, sqrts);
 
     result *= 2.0*(pdf->xq(tmpxh, delta, UVAL) + pdf->xq(tmpxh, delta, DVAL));
@@ -246,6 +248,8 @@ double CrossSection2::Sigma(double pt1, double pt2, double y1, double y2, double
  * Integrate over kinematical variables z_1,z_2 to take into account
  * hadronization
  *
+ * The given ptinterpolator2d is used to save the 2d interpolator
+ *
  * Returns 0 if no error occurred, otherwise <0
  */
 int CrossSection2::LoadPtData(double y1, double y2)
@@ -259,75 +263,108 @@ int CrossSection2::LoadPtData(double y1, double y2)
     std::stringstream tmp2; 
     tmp2 << y2; y2str = tmp2.str();
 
-/*
-    ptvals.push_back(1.0); ptvals.push_back(1.5); ptvals.push_back(2.0);
-    ptvals.push_back(2.5); ptvals.push_back(3.0); ptvals.push_back(3.5);
-    ptvals.push_back(4.0); ptvals.push_back(4.5); ptvals.push_back(5.0);
-   
-    ptstrings.push_back("1"); ptstrings.push_back("1.5"); ptstrings.push_back("2");
-    ptstrings.push_back("2.5"); ptstrings.push_back("3"); ptstrings.push_back("3.5");
-    ptstrings.push_back("4"); ptstrings.push_back("4.5"); ptstrings.push_back("5");
-*/
     for (uint i=0; i<ptinterpolators.size(); i++)
     {
         for (uint j=0; j<ptinterpolators[i].size(); j++)
         {
             delete ptinterpolators[i][j];
+            delete ptinterpolators_rev[i][j];
         }
         ptinterpolators[i].clear();
+        ptinterpolators_rev[i].clear();
     }
     ptinterpolators.clear();
+    ptinterpolators_rev.clear();
+
+    std::string fileprefix = "rhic_vertailu_4y/cyrille_";
 
    int points=ptvals.size();
    for (int pt1ind=0; pt1ind<points; pt1ind++)
    {
        std::vector<Interpolator*> tmpinterpolators;
+       std::vector<Interpolator*> tmpinterpolators_rev;
        for (int pt2ind=0; pt2ind<points; pt2ind++)
        {
             std::stringstream fname;
-            fname << "rhic_vertailu/pp/cyrille_pt1_" << ptstrings[pt1ind] << "_pt2_"
+            fname << fileprefix << "pt1_" << ptstrings[pt1ind] << "_pt2_"
                 << ptstrings[pt2ind] << "_y1_" << y1str << "_y2_" << y2str;
+            std::stringstream fname_rev;
+            fname_rev << fileprefix << "pt1_" << ptstrings[pt2ind] << "_pt2_"
+                << ptstrings[pt1ind] << "_y1_" << y2str << "_y2_" << y1str;
             //cout << "# Loading file " << fname.str() << endl;
+            
             std::ifstream file(fname.str().c_str());
-            if (!file.is_open())
+            std::ifstream file_rev(fname_rev.str().c_str());
+            
+            if (!file.is_open() or !file_rev.is_open())
             {
-                cerr << "Can't open file " << fname.str()
+                cerr << "Can't open file " << fname.str() << " or " << fname_rev.str()
                     << " " << LINEINFO << endl;
                 return -1;
             }
             std::vector<double> dphi;
+            std::vector<double> dphi_rev;
             std::vector<double> xs;
+            std::vector<double> xs_rev;
             while(!file.eof())
             {
                 string line;
                 getline(file, line);
-                if (line.substr(0,1)=="#" or line.length()<5)
-                    continue;   // Comment
-                std::istringstream iss(line);
-                string angle,val;
-                iss >> angle; iss >> val;
-
-                dphi.push_back(StrToReal(angle));
-                xs.push_back(StrToReal(val));
+                if (line.substr(0,1)!="#" and line.length()>3)  // not comment/empty
+                {
+                    std::istringstream iss(line);
+                    string angle,val;
+                    iss >> angle; iss >> val;
+                    xs.push_back(StrToReal(val));
+                    dphi.push_back(StrToReal(angle));
+                }
+            }
+            while (!file_rev.eof())
+            {
+                string line;
+                getline(file_rev, line);
+                if (line.substr(0,1)!="#" and line.length()>3)  // not comment/empty
+                {
+                    std::istringstream iss(line);
+                    string angle,val;
+                    iss >> angle; iss >> val;
+                    xs_rev.push_back(StrToReal(val));
+                    dphi_rev.push_back(StrToReal(angle));
+                }
             }
 
             file.close();
+            file_rev.close();
 
             if (xs.size()<2)
             {
                 cerr << "Datafile without valid datapoints, filename " << fname.str()
                     << " " << LINEINFO << endl;
-                continue;
+                return -1;
+            }
+            if (xs_rev.size()<2)
+            {
+                cerr << "Datafile without valid datapoints, filename " << fname_rev.str()
+                    << " " << LINEINFO << endl;
+                return -1;
             }
 
             // Mirror \dphi if necessary
             if (dphi[dphi.size()-1] < 1.01*M_PI)
             {
-                int center_index = dphi.size()-1;
                 for (int i=dphi.size()-2; i>=0; i--)
                 {
                     dphi.push_back(M_PI + (M_PI-dphi[i]) );
                     xs.push_back(xs[i]);
+                }
+            }
+            // Mirror \dphi if necessary
+            if (dphi_rev[dphi_rev.size()-1] < 1.01*M_PI)
+            {
+                for (int i=dphi_rev.size()-2; i>=0; i--)
+                {
+                    dphi_rev.push_back(M_PI + (M_PI-dphi[i]) );
+                    xs_rev.push_back(xs[i]);
                 }
             }
 
@@ -337,18 +374,64 @@ int CrossSection2::LoadPtData(double y1, double y2)
             tmpinterp->Initialize();
             tmpinterpolators.push_back(tmpinterp);
 
+            Interpolator *tmpinterp_rev = new Interpolator(dphi_rev, xs_rev);
+            tmpinterp_rev->Initialize();
+            tmpinterpolators_rev.push_back(tmpinterp_rev);
+
        }
        ptinterpolators.push_back(tmpinterpolators);
+       ptinterpolators_rev.push_back(tmpinterpolators_rev);
    }
-   //cout << "# Data loaded" << endl; 
+   //cout << "# Data loaded" << endl;
+
+  
 
     return 0;
+}
+
+/*
+ * Use saved ptinterpolators and ptinterpolators_rev (for z and 1-z)
+ * to initialize 2D interpolators ptinterpolator2d and ptinterpolator2d_rev
+ * respectively which return amplitude at given phi as a function of pt1 and
+ * pt2
+ */
+void CrossSection2::Prepare2DInterpolators(double phi)
+{
+    if (ptinterpolator2d != NULL)
+        delete ptinterpolator2d;
+    std::vector< std::vector< double > > data;   //[pt1][pt2]
+    for (uint pt1ind = 0; pt1ind < ptvals.size(); pt1ind++)
+    {    
+        std::vector<double> tmpvec;
+        for (uint pt2ind=0; pt2ind < ptvals.size(); pt2ind++)
+        {
+            tmpvec.push_back(ptinterpolators[pt1ind][pt2ind]->Evaluate(phi));
+        }
+        data.push_back(tmpvec);
+    }
+    ptinterpolator2d = new Interpolator2D(ptvals, data);
+
+
+    if (ptinterpolator2d_rev != NULL)
+        delete ptinterpolator2d_rev;
+    data.clear();   //[pt1][pt2]
+    for (uint pt1ind = 0; pt1ind < ptvals.size(); pt1ind++)
+    {
+        std::vector<double> tmpvec;
+        for (uint pt2ind=0; pt2ind < ptvals.size(); pt2ind++)
+        {
+            tmpvec.push_back(ptinterpolators_rev[pt1ind][pt2ind]->Evaluate(phi));
+        }
+        data.push_back(tmpvec);
+    }
+    ptinterpolator2d_rev = new Interpolator2D(ptvals, data);
 }
 
 struct dSigma_full_helper
 {
     double pt1,pt2;
-    double minpt2;
+    double minpt1, minpt2;
+    double miny,maxy;
     Interpolator2D *pt_interpolator, *pt_interpolator_rev;
     CrossSection2 *xs;
     double x1,x2;
@@ -404,7 +487,7 @@ double CrossSection2::dSigma_full(double pt1, double pt2, double y1, double y2,
         << " relerror " << std::abs(abserr/result) << " dphi " << phi << endl;
     */
     // if we calculate dN/d^2kd^2qdy_1dy_2 
-    result *= (1.0 - z(pt1, pt2, y1, y2));
+    //result *= (1.0 - z(pt1, pt2, y1, y2));
 
     result *= ALPHAS * Cf / (4.0*SQR(M_PI)); // NB! \int d^2b = S_T is dropped as it
     // should cancel, doesn't work anymore if we calculated something b-dependent!!!!
@@ -447,30 +530,43 @@ double dSigma_full_helperf_z2(double z2, void* p)
         cerr << "Q=" << qscale << " too small, pt1: " << par->pt1 << ", pt2: " << par->pt2
             << " " << LINEINFO << endl;
 
+    double xh = par->xs->xh(par->pt1/par->z1, par->pt2/z2, par->y1, par->y2, par->sqrts);
+
+    double xf_u = par->xs->Pdf()->xq(xh, qscale, U);
+    double xf_d = par->xs->Pdf()->xq(xh, qscale, D);
+
+    double frag_u_pi0_z1 = par->xs->FragFun()->Evaluate(U, PI0, par->z1, qscale);
+    double frag_d_pi0_z1 = par->xs->FragFun()->Evaluate(D, PI0, par->z1, qscale);
+    double frag_g_pi0_z1 = par->xs->FragFun()->Evaluate(G, PI0, par->z1, qscale);
+    double frag_u_pi0_z2 = par->xs->FragFun()->Evaluate(U, PI0, z2, qscale);
+    double frag_d_pi0_z2 = par->xs->FragFun()->Evaluate(D, PI0, z2, qscale);
+    double frag_g_pi0_z2 = par->xs->FragFun()->Evaluate(G, PI0, z2, qscale);
+
     ///TODO: why this was multiplied by z1?
-    result = par->pt_interpolator->Evaluate(par->pt1/par->z1, par->pt2/z2);
+    result = par->pt_interpolator->Evaluate(par->pt1/par->z1, par->pt2/z2)
+        * (1.0 - par->xs->z(par->pt1/par->z1, par->pt2/z2, par->y1, par->y2));
     //result = par->xs->dSigma(par->pt1, par->pt2, par->y1, par->y2, par->phi, par->sqrts, false);
         /*+ par->xs->dSigma(par->pt1/par->z1, par->pt2/z2, par->y1, par->y2, par->phi,
             par->sqrts, false); // interpolator is correction
             */
     double xf_frag1 = 
-          par->xh*par->xs->Pdf()->xq(par->xh, qscale, U)
-            * par->xs->FragFun()->Evaluate(U, PI0, par->z1, qscale)
-            * par->xs->FragFun()->Evaluate(G, PI0, z2, qscale)
-          + par->xs->Pdf()->xq(par->xh, qscale, D)
-            *  par->xs->FragFun()->Evaluate(D, PI0, par->z1, qscale)
-            *  par->xs->FragFun()->Evaluate(G, PI0, z2, qscale);
+          xf_u
+            * frag_u_pi0_z1
+            * frag_g_pi0_z2
+          + xf_d
+            *  frag_d_pi0_z1
+            *  frag_g_pi0_z2;
 
     bool deuteron = par->deuteron;
     // u in proton = d in deuteron
     if (deuteron)
         xf_frag1 +=
-         par->xh*par->xs->Pdf()->xq(par->xh, qscale, D) // u in neutron
-            * par->xs->FragFun()->Evaluate(U, PI0, par->z1, qscale)
-            * par->xs->FragFun()->Evaluate(G, PI0, z2, qscale)
-          + par->xs->Pdf()->xq(par->xh, qscale, U) // d in neutron
-            *  par->xs->FragFun()->Evaluate(D, PI0, par->z1, qscale)
-            *  par->xs->FragFun()->Evaluate(G, PI0, z2, qscale);
+         xf_d // u in neutron
+            * frag_u_pi0_z1
+            * frag_g_pi0_z2
+          + xf_u // d in neutron
+            *  frag_d_pi0_z1
+            *  frag_g_pi0_z2;
     result *= xf_frag1;
 
 
@@ -479,22 +575,24 @@ double dSigma_full_helperf_z2(double z2, void* p)
 
     
     double xf_frag2 =
-        par->xh*par->xs->Pdf()->xq(par->xh, qscale, U)
-            * par->xs->FragFun()->Evaluate(U, PI0, z2, qscale)
-            * par->xs->FragFun()->Evaluate(G, PI0, par->z1, qscale)
-          + par->xs->Pdf()->xq(par->xh, qscale, D)
-            *  par->xs->FragFun()->Evaluate(D, PI0, z2, qscale)
-            *  par->xs->FragFun()->Evaluate(G, PI0, par->z1, qscale);
+        xf_u
+            * frag_u_pi0_z2
+            * frag_g_pi0_z1
+          + xf_d
+            *  frag_d_pi0_z2
+            *  frag_g_pi0_z1;
     if (deuteron)
         xf_frag2 +=
-         par->xh*par->xs->Pdf()->xq(par->xh, qscale, D) // u in neutron
-            * par->xs->FragFun()->Evaluate(U, PI0, z2, qscale)
-            * par->xs->FragFun()->Evaluate(G, PI0, par->z1, qscale)
-          + par->xs->Pdf()->xq(par->xh, qscale, U)  // d in neutron
-            *  par->xs->FragFun()->Evaluate(D, PI0, z2, qscale)
-            *  par->xs->FragFun()->Evaluate(G, PI0, par->z1, qscale);
+         xf_d // u in neutron
+            * frag_u_pi0_z2
+            * frag_g_pi0_z1
+          + xf_u  // d in neutron
+            *  frag_d_pi0_z2
+            *  frag_g_pi0_z1;
 
-    result += par->pt_interpolator_rev->Evaluate(par->pt2/z2, par->pt1/par->z1)*xf_frag2;
+    result += par->pt_interpolator_rev->Evaluate(par->pt2/z2, par->pt1/par->z1)
+        * (1.0 - par->xs->z(par->pt2/z2, par->pt1/par->z1, par->y2, par->y1))   
+        * xf_frag2;
     
 
    /*cerr << "pt1/z1 " << par->pt1/par->z1 << " pt2/z2 " << par->pt2/z2 << " amp1 "
@@ -510,7 +608,10 @@ double dSigma_full_helperf_z2(double z2, void* p)
  */
 double Inthelperf_cp_pt1(double pt1, void* p);
 double Inthelperf_cp_pt2(double pt2, void* p);
+double Inthelperf_y1(double pt2, void* p);
+double Inthelperf_y2(double pt2, void* p);
 const int PTINT_INTERVALS_CP=2;
+const int YINT_INTERVALS=1;
 const double PTINT_ACCURACY_CP=0.01;
 
 double CrossSection2::dSigma_integrated(double minpt1, double minpt2, double miny, double maxy,
@@ -519,71 +620,43 @@ double CrossSection2::dSigma_integrated(double minpt1, double minpt2, double min
 
     dSigma_full_helper helper;
     helper.minpt2=minpt2;
+    helper.minpt1=minpt1;
     helper.xs=this;
     helper.phi=phi;
     helper.deuteron=deuteron;
     helper.sqrts=sqrts;
 
     std::vector<double> yvals;
-    /*yvals.push_back(miny);
-    yvals.push_back(3.2);
-    yvals.push_back(maxy);*/
-    maxy=4;miny=2.4;
-    yvals.push_back(2.4); yvals.push_back(3.2); yvals.push_back(4);
+    //yvals.push_back(2.4); yvals.push_back(3.2); yvals.push_back(4);
+    yvals.push_back(2.4); yvals.push_back(2.8); yvals.push_back(3.2);
+    yvals.push_back(3.6); yvals.push_back(4);
+    maxy=yvals[yvals.size()-1]; miny=yvals[0];
+    helper.miny=miny; helper.maxy=maxy;
+    
 
     double maxpt = ptvals[ptvals.size()-1]*0.99;
     
-
+    
     gsl_function fun;
     fun.function = Inthelperf_cp_pt1;
     fun.params=&helper;
 
     double result=0;
-
-    for (int y1ind=0; y1ind<3; y1ind++)
+    
+    for (int y1ind=0; y1ind<yvals.size(); y1ind++)
     {
         double y2intres=0;
-        for (int y2ind=0; y2ind<3; y2ind++)
+        for (int y2ind=0; y2ind<yvals.size(); y2ind++)
         {
             double y1 = yvals[y1ind]; double y2=yvals[y2ind];
             
             helper.y1=y1;
             helper.y2=y2;
-            cout << "# " << phi << " y1 " << y1 << " y2 " << y2 << endl;
+            
 
             // Load data and prepare interpolation in (pt1,pt2) plane
             LoadPtData(helper.y1, helper.y2);
-            // Prepare 2D grid to interpolate
-            if (ptinterpolator2d != NULL)
-                delete ptinterpolator2d;
-            std::vector< std::vector< double > > data;   //[pt1][pt2]
-            for (uint pt1ind = 0; pt1ind < ptvals.size(); pt1ind++)
-            {
-                std::vector<double> tmpvec;
-                for (uint pt2ind=0; pt2ind < ptvals.size(); pt2ind++)
-                {
-                    tmpvec.push_back(ptinterpolators[pt1ind][pt2ind]->Evaluate(phi));
-                }
-                data.push_back(tmpvec);
-            }
-            ptinterpolator2d = new Interpolator2D(ptvals, data);
-
-            LoadPtData(helper.y2, helper.y1);
-            // Prepare 2D grid to interpolate
-            if (ptinterpolator2d_rev != NULL)
-                delete ptinterpolator2d_rev;
-            data.clear();   //[pt1][pt2]
-            for (uint pt1ind = 0; pt1ind < ptvals.size(); pt1ind++)
-            {
-                std::vector<double> tmpvec;
-                for (uint pt2ind=0; pt2ind < ptvals.size(); pt2ind++)
-                {
-                    tmpvec.push_back(ptinterpolators[pt1ind][pt2ind]->Evaluate(phi));
-                }
-                data.push_back(tmpvec);
-            }
-            ptinterpolator2d_rev = new Interpolator2D(ptvals, data);
-
+            Prepare2DInterpolators(phi);
             double intresult,abserr;
             
             gsl_integration_workspace *workspace 
@@ -592,26 +665,82 @@ double CrossSection2::dSigma_integrated(double minpt1, double minpt2, double min
                     0, PTINT_ACCURACY_CP, PTINT_INTERVALS_CP, GSL_INTEG_GAUSS15, workspace,
                     &intresult, &abserr);
             gsl_integration_workspace_free(workspace);
+            cout << "# " << phi << " y1 " << y1 << " y2 " << y2 << " res " << intresult << endl;
 
             if (status)
             {
                 cerr << "pt1 int failed at " << LINEINFO << " intresult: " << intresult
-                    << " relerr " << std::abs(abserr/result) << " phi: " << phi <<
-                    " " << LINEINFO << endl;
+                    << " relerr " << std::abs(abserr/intresult) << " phi: " << phi << endl;
             }
-            if (y2ind==1) y2intres += 4.0*intresult;
+            if (y2ind==1 or y2ind == 3) y2intres += 4.0*intresult;
+            else if (y2ind==2) y2intres += 2.0*intresult;
             else y2intres += intresult;
         }
-        y2intres *= (maxy-miny)/6.0;
+        /*y2intres *= (maxy-miny)/6.0;
         if (y1ind==1) result += 4.0*y2intres;
+        else result += y2intres;*/
+        y2intres *= (maxy-miny)/12.0;
+        if (y1ind==1 or y1ind==3) result += 4.0*y2intres;
+        else if (y1ind==2) result += 2.0*y2intres;
         else result += y2intres;
     }
-    result *= (maxy-miny)/6.0;
+    //result *= (maxy-miny)/6.0;
+    result *= (maxy-miny)/12.0;
     
-    //result *= (maxy-miny)*(maxy-miny);  // Assume y-indep.
-    //result = intresult;
     return result*2.0*M_PI; //2pi from one angular integral
 }
+
+double Inthelperf_y1(double y1, void* p)
+{
+    dSigma_full_helper* par = (dSigma_full_helper*)p;
+    par->y1=y1;
+
+    gsl_function fun;
+    fun.function=Inthelperf_y1;
+    fun.params=par;
+    
+    double result,abserr;
+    gsl_integration_workspace *workspace 
+     = gsl_integration_workspace_alloc(YINT_INTERVALS);
+    int status = gsl_integration_qag(&fun, par->miny, par->maxy,
+            0, 0.01, YINT_INTERVALS, GSL_INTEG_GAUSS15, workspace,
+            &result, &abserr);
+    gsl_integration_workspace_free(workspace);
+
+    return result;
+}
+
+double Inthelperf_y2(double y2, void* p)
+{
+    dSigma_full_helper* par = (dSigma_full_helper*)p;
+    par->y2=y2;
+
+    gsl_function fun;
+    fun.function=Inthelperf_y1;
+    fun.params=par;
+    
+    
+    double result,abserr;
+            
+    gsl_integration_workspace *workspace 
+        = gsl_integration_workspace_alloc(PTINT_INTERVALS_CP);
+    int status = gsl_integration_qag(&fun, par->minpt1, par->xs->MaxPt(),
+            0, PTINT_ACCURACY_CP, PTINT_INTERVALS_CP, GSL_INTEG_GAUSS15, workspace,
+            &result, &abserr);
+    gsl_integration_workspace_free(workspace);
+
+    if (status)
+    {
+        cerr << "pt1 int failed at " << LINEINFO << " intresult: " << result
+            << " relerr " << std::abs(abserr/result) << " phi: " << par->phi <<
+            " " << LINEINFO << endl;
+    }
+
+
+    return result;
+}
+
+
 
 double Inthelperf_cp_pt1(double pt1, void* p)
 {
@@ -757,7 +886,7 @@ CrossSection2::CrossSection2(AmplitudeLib* N_, PDF* pdf_,FragmentationFunction* 
     ptinterpolator2d_rev = NULL;
 
     //for (double pt = 1; pt<=9.5; pt+=0.5)
-    for (double pt=1; pt<=7; pt+=1)
+    for (double pt=1; pt<=4; pt+=1)
     {
         ptvals.push_back(pt);
         std::stringstream s; s << pt;
@@ -808,6 +937,7 @@ CrossSection2::~CrossSection2()
         for (uint j=0; j<ptinterpolators[i].size(); j++)
         {
             delete ptinterpolators[i][j];
+            delete ptinterpolators_rev[i][j];
         }
     }
 
@@ -829,5 +959,14 @@ double CrossSection2::M_Q()
 
 double CrossSection2::MaxPt()
 {
-    return ptvals[ptvals.size()-1];
+    return ptvals[ptvals.size()-1]*0.999;
+}
+
+Interpolator2D * CrossSection2::Ptinterpolator2d()
+{
+    return ptinterpolator2d;
+}
+Interpolator2D * CrossSection2::Ptinterpolator2d_rev()
+{
+    return ptinterpolator2d_rev;
 }
