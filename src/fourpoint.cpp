@@ -43,8 +43,8 @@ double Inthelperf_correction2(double* vec, size_t dim, void* p);
 void pVegas_wrapper(double x[6], double f[1], void* par);
 double NormalizeAngle(double phi);
 
-bool cyrille=false; 
-bool correction=true;
+bool cyrille=true; 
+bool correction=false;
 
 /*
  * Calculates the correction term/full integral over 6-dim. hypercube
@@ -313,12 +313,12 @@ double CrossSection2::CorrectionTerm(double pt1, double pt2, double ya, double p
         << " relerr " << std_dev[0]/estim[0] << " time "
        << (std::time(NULL)-start)/60.0/60.0 << " h"<< endl;
 
-        if (std_dev[0]/estim[0] > 0.1)
+        if (std::abs(std_dev[0]/estim[0]) > 0.1)
         {
             cout << "#!!!!!!!!!!!!!!! INTEGRAL DOESN'T CONVERGE!?!?!?" << endl;
             cerr <<"INTEGRLA DOESN'T CONVERTE! phi=" << phi
                 << " result: " << estim[0] << " +/- " << std_dev[0]
-                << " relerr " << std_dev[0]/estim[0] << " pt1 " << pt1 << " pt2 "
+                << " relerr " << std::abs(std_dev[0]/estim[0]) << " pt1 " << pt1 << " pt2 "
                 << pt2 << " z " << z << endl;
         }
 

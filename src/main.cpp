@@ -208,13 +208,35 @@ int main(int argc, char* argv[])
     double normalization = 1;//cross_section.Sigma(pt1, pt2, y1, y2, sqrts);
     //cout << "# Normalization totxs " << normalization << endl;
     //cout << "# Theta=2.5 " << cross_section.dSigma(pt1,pt2,y1,y2,2.5,sqrts) << endl;
-    //int points=10;
-    int points=40;
+    int points=6;
     if (phi>-0.5) points=1;    // calculate only given angle
-    //double maxphi=2.0*M_PI-0.5;
+    double minphi = 2.9;
+    //double maxphi=2.0*M_PI-minphi;
     double maxphi=M_PI;
-    double minphi = 0.5;
+    
     bool fftw=false;
+    /*cout << "# G at y=" << y1 << endl;
+    for (double pt=1e-4; pt<400; pt*=1.1)
+    {
+        amplitude.InitializeInterpolation(y1);
+        cout << pt << " " << amplitude.S_k(pt, y1) << endl;
+        //cout << pt << " " << cross_section.G(pt, 0.02*std::exp(-y1), 0.5) << endl;
+    }
+    return 0;
+    */
+    /*cross_section.LoadPtData(2.4,2.4);
+    cross_section.Prepare2DInterpolators(3.14159);
+    for (double pt1=1; pt1<cross_section.MaxPt(); pt1+=0.1)
+    {
+        for (double pt2=1; pt2<cross_section.MaxPt(); pt2+=0.1)
+        {
+            cout << pt1 << " " << pt2 << " " <<
+                cross_section.Ptinterpolator2d()->Evaluate(pt1, pt2)
+                + cross_section.Ptinterpolator2d_rev()->Evaluate(pt1, pt2) << endl;
+        }
+    }
+    return 0;*/
+            
 
     // FFTW
     if (fftw)
@@ -226,7 +248,17 @@ int main(int argc, char* argv[])
     /*if (!fftw and false)
         cross_section.LoadPtData(y1,y2);
     */
+    //cross_section.LoadPtData(y1,y2);
     int ready=0;
+    /*
+    
+    cross_section.Prepare2DInterpolators(2);
+    cout << "(2,2): " << cross_section.dSigma(2, 2, y1, y2, 2, 200, false)
+        << " interp. (2,2.25): " << cross_section.Ptinterpolator2d()->Evaluate(2, 2.25)
+        << " (2,2.5): " << cross_section.dSigma(2, 2.5, y1, y2, 2, 200, false) << endl;
+    return 0;*/
+
+    
     #pragma omp parallel for
     for (int i=0; i<points; i++)
     {
@@ -244,13 +276,14 @@ int main(int argc, char* argv[])
             cout << "# Starting index " << ready << "/" << points << " angle " << theta << endl;
             
         }
+
+        //cross_section.Prepare2DInterpolators(theta);
         
         if (!fftw)
-            result = cross_section.dSigma_integrated(2, 1, 2.4, 4, theta, sqrts, deuteron);
-                /*+ cross_section.dSigma_integrated(2,1,3.2,2.4, theta, sqrts, deuteron); 
-            */
+            //result = cross_section.dSigma_integrated(2, 1, 2.4, 4, theta, sqrts, deuteron);
+
             //result = cross_section.dSigma_full(pt1,pt2,y1,y2,theta,sqrts, deuteron);
-            //result = cross_section.dSigma(pt1,pt2,y1,y2,theta,sqrts,multiply_pdf);
+            result = cross_section.dSigma(pt1,pt2,y1,y2,theta,sqrts,multiply_pdf);
             //    + cross_section.dSigma(pt2,pt1,y2,y1,theta,sqrts,multiply_pdf);
         else
             result = cross_section.CorrectionTerm_fft(pt1, pt2, ya, theta);

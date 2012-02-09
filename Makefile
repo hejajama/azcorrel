@@ -1,4 +1,4 @@
-CXXFLAGS = `gsl-config --cflags` -Wno-long-long  -O3 -Wall -pedantic -fopenmp -I ../amplitudelib 
+CXXFLAGS = `gsl-config --cflags` -Wno-long-long  -O3 -Wall -pedantic -I ../amplitudelib #-fopenmp 
 LDFLAGS = `gsl-config --libs` -lm -lfftw3 -lgfortran -lpthread #-L../amplitudelib/ -lamplitude 
 CFLAGS = -D_REENTRANT -std=c99
 FORTRANFLAGS = 
