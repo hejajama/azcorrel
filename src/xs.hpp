@@ -91,6 +91,8 @@ class CrossSection2
 
         std::vector<double> ptvals;
         std::vector<std::string> ptstrings;
+
+        bool apply_corrections; 
         
 };
 

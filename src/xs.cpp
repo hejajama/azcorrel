@@ -246,235 +246,7 @@ double CrossSection2::Sigma(double pt1, double pt2, double y1, double y2, double
  * momenta. Also take into account fragmentation => integrate over z_i from x_1
  * up to 1
  */
-/*
- * Load \Delta \phi data from files pt1_#_pt2_#_y1_#_y2_#, interpolate in pt and phi
- * Integrate over kinematical variables z_1,z_2 to take into account
- * hadronization
- *
- * The given ptinterpolator2d is used to save the 2d interpolator
- *
- * Returns 0 if no error occurred, otherwise <0
- */
-int CrossSection2::LoadPtData(double y1, double y2)
-{
-   // Load datafiles 
-   // Generate interpolators
 
-    std::stringstream tmp;
-    std::string y1str, y2str;
-    tmp << y1; y1str = tmp.str();
-    std::stringstream tmp2; 
-    tmp2 << y2; y2str = tmp2.str();
-
-    for (uint i=0; i<ptinterpolators.size(); i++)
-    {
-        for (uint j=0; j<ptinterpolators[i].size(); j++)
-        {
-            delete ptinterpolators[i][j];
-            delete ptinterpolators_rev[i][j];
-        }
-        ptinterpolators[i].clear();
-        ptinterpolators_rev[i].clear();
-    }
-    ptinterpolators.clear();
-    ptinterpolators_rev.clear();
-    for (uint i=0; i<ptinterpolators_correction.size(); i++)
-    {
-        for (uint j=0; j<ptinterpolators_correction[i].size(); j++)
-        {
-            delete ptinterpolators_correction[i][j];
-            delete ptinterpolators_rev_correction[i][j];
-        }
-        ptinterpolators_correction[i].clear();
-        ptinterpolators_rev_correction[i].clear();
-    }
-    ptinterpolators_correction.clear();
-    ptinterpolators_rev_correction.clear();
-
-    //std::string fileprefix = "rhic_vertailu_4y/cyrille_";
-    string fileprefix = "rhic_central/";
-    string fileprefix_cor = "rhic_korjaus_central/";
-
-   int points=ptvals.size();
-   for (int pt1ind=0; pt1ind<points; pt1ind++)
-   {
-       std::vector<Interpolator*> tmpinterpolators;
-       std::vector<Interpolator*> tmpinterpolators_rev;
-       std::vector<Interpolator*> tmpinterpolators_cor;
-       std::vector<Interpolator*> tmpinterpolators_rev_cor;
-       for (int pt2ind=0; pt2ind<points; pt2ind++)
-       {
-            std::stringstream fname, fname_rev, fname_cor, fname_rev_cor;
-            /*fname << fileprefix << "pt1_" << ptstrings[pt1ind] << "_pt2_"
-                << ptstrings[pt2ind] << "_y1_" << y1str << "_y2_" << y2str;
-            fname_rev << fileprefix << "pt1_" << ptstrings[pt2ind] << "_pt2_"
-                << ptstrings[pt1ind] << "_y1_" << y2str << "_y2_" << y1str;
-              */  
-            fname << fileprefix << "y1_" << y1str <<"_y2_" << y2str << "/cyrille_pt1_"
-                << ptstrings[pt1ind] <<"_pt2_" << ptstrings[pt2ind];
-            fname_rev << fileprefix << "y1_" << y2str <<"_y2_" << y1str << "/cyrille_pt1_"
-                << ptstrings[pt1ind] <<"_pt2_" << ptstrings[pt2ind];
-
-            fname_cor << fileprefix_cor << "korjaus_pt1_" << ptstrings[pt1ind] << "_pt2_" << ptstrings[pt2ind]
-                << "_y1_" << y1str <<"_y2_" << y2str;
-            fname_rev_cor << fileprefix_cor  << "korjaus_pt1_" << ptstrings[pt1ind] << "_pt2_" << ptstrings[pt2ind]
-                << "_y1_" << y2str <<"_y2_" << y1str;
-            //cout << "# Loading files " << fname.str() << " and " << fname_rev.str() << endl;
-            
-            std::ifstream file(fname.str().c_str());
-            std::ifstream file_rev(fname_rev.str().c_str());
-            std::ifstream file_cor(fname_cor.str().c_str());
-            std::ifstream file_rev_cor(fname_rev_cor.str().c_str());
-            
-            if (!file.is_open() or !file_rev.is_open() or !file_cor.is_open()
-                or !file_rev_cor.is_open())
-            {
-                cerr << "Can't open file " << fname.str() << " or " << fname_rev.str()
-                    << " or " << fname_cor.str() << " or " << fname_rev_cor.str()
-                    << " " << LINEINFO << endl;
-                return -1;
-            }
-            std::vector<double> dphi;
-            std::vector<double> dphi_rev;
-            std::vector<double> xs;
-            std::vector<double> xs_rev;
-
-            std::vector<double> dphi_cor;
-            std::vector<double> dphi_rev_cor;
-            std::vector<double> xs_cor;
-            std::vector<double> xs_rev_cor;
-            while(!file.eof())
-            {
-                string line;
-                getline(file, line);
-                if (line.substr(0,1)!="#" and line.length()>3)  // not comment/empty
-                {
-                    std::istringstream iss(line);
-                    string angle,val;
-                    iss >> angle; iss >> val;
-                    xs.push_back(StrToReal(val));
-                    dphi.push_back(StrToReal(angle));
-                }
-            }
-            while (!file_rev.eof())
-            {
-                string line;
-                getline(file_rev, line);
-                if (line.substr(0,1)!="#" and line.length()>3)  // not comment/empty
-                {
-                    std::istringstream iss(line);
-                    string angle,val;
-                    iss >> angle; iss >> val;
-                    xs_rev.push_back(StrToReal(val));
-                    dphi_rev.push_back(StrToReal(angle));
-                }
-            }
-            while(!file_cor.eof())
-            {
-                string line;
-                getline(file_cor, line);
-                if (line.substr(0,1)!="#" and line.length()>3)  // not comment/empty
-                {
-                    std::istringstream iss(line);
-                    string angle,val;
-                    iss >> angle; iss >> val;
-                    xs_cor.push_back(StrToReal(val));
-                    dphi_cor.push_back(StrToReal(angle));
-                }
-            }
-            while (!file_rev_cor.eof())
-            {
-                string line;
-                getline(file_rev_cor, line);
-                if (line.substr(0,1)!="#" and line.length()>3)  // not comment/empty
-                {
-                    std::istringstream iss(line);
-                    string angle,val;
-                    iss >> angle; iss >> val;
-                    xs_rev_cor.push_back(StrToReal(val));
-                    dphi_rev_cor.push_back(StrToReal(angle));
-                }
-            }
-
-
-            file.close();
-            file_rev.close();
-
-            if (xs.size()<2 or xs_rev.size()<2 or xs_cor.size()<2 or xs_rev_cor.size()<2)
-            {
-                cerr << "Datafile without valid datapoints, filename " <<
-                    fname.str() << " or " << fname_rev.str()
-                    << " or " << fname_cor.str() << " or " << fname_rev_cor.str()
-                    << " " << LINEINFO << endl;
-                return -1;
-            }
-
-            // Mirror \dphi if necessary
-            if (dphi[dphi.size()-1] < 1.01*M_PI)
-            {
-                for (int i=dphi.size()-2; i>=0; i--)
-                {
-                    dphi.push_back(M_PI + (M_PI-dphi[i]) );
-                    xs.push_back(xs[i]);
-                }
-            }
-            // Mirror \dphi if necessary
-            if (dphi_rev[dphi_rev.size()-1] < 1.01*M_PI)
-            {
-                for (int i=dphi_rev.size()-2; i>=0; i--)
-                {
-                    dphi_rev.push_back(M_PI + (M_PI-dphi_rev[i]) );
-                    xs_rev.push_back(xs_rev[i]);
-                }
-            }
-            if (dphi_cor[dphi_cor.size()-1] < 1.01*M_PI)
-            {
-                for (int i=dphi_cor.size()-2; i>=0; i--)
-                {
-                    dphi_cor.push_back(M_PI + (M_PI-dphi_cor[i]) );
-                    xs_cor.push_back(xs_cor[i]);
-                }
-            }
-            // Mirror \dphi if necessary
-            if (dphi_rev[dphi_rev_cor.size()-1] < 1.01*M_PI)
-            {
-                for (int i=dphi_rev_cor.size()-2; i>=0; i--)
-                {
-                    dphi_rev_cor.push_back(M_PI + (M_PI-dphi_rev_cor[i]) );
-                    xs_rev_cor.push_back(xs_rev_cor[i]);
-                }
-            }
-
-            
-
-            Interpolator *tmpinterp = new Interpolator(dphi, xs);
-            tmpinterp->Initialize();
-            tmpinterpolators.push_back(tmpinterp);
-
-            Interpolator *tmpinterp_rev = new Interpolator(dphi_rev, xs_rev);
-            tmpinterp_rev->Initialize();
-            tmpinterpolators_rev.push_back(tmpinterp_rev);
-
-            Interpolator *tmpinterp_cor = new Interpolator(dphi_cor, xs_cor);
-            tmpinterp_cor->Initialize();
-            tmpinterpolators_cor.push_back(tmpinterp_cor);
-
-            Interpolator *tmpinterp_rev_cor = new Interpolator(dphi_rev_cor, xs_rev_cor);
-            tmpinterp_rev_cor->Initialize();
-            tmpinterpolators_rev_cor.push_back(tmpinterp_rev_cor);
-
-       }
-       ptinterpolators.push_back(tmpinterpolators);
-       ptinterpolators_rev.push_back(tmpinterpolators_rev);
-       ptinterpolators_correction.push_back(tmpinterpolators_cor);
-       ptinterpolators_rev_correction.push_back(tmpinterpolators_rev_cor);
-   }
-   //cout << "# Data loaded" << endl;
-
-  
-
-    return 0;
-}
 
 /*
  * Use saved ptinterpolators and ptinterpolators_rev (for z and 1-z)
@@ -513,6 +285,9 @@ void CrossSection2::Prepare2DInterpolators(double phi)
     }
     ptinterpolator2d_rev = new Interpolator2D(ptvals, data);
 
+    if (!apply_corrections)
+        return;
+    
     if (ptinterpolator2d_correction != NULL)
         delete ptinterpolator2d_correction;
     data.clear();   //[pt1][pt2]
@@ -664,7 +439,7 @@ double dSigma_full_helperf_z2(double z2, void* p)
     // Evaluate(gluon momentum, quark momentum)
     result =
         (par->pt_interpolator->Evaluate(par->pt1/par->z1, par->pt2/z2)
-        + 0*par->pt_interpolator_cor->Evaluate(par->pt1/par->z1, par->pt2/z2) )
+        + 0/**par->pt_interpolator_cor->Evaluate(par->pt1/par->z1, par->pt2/z2)*/ )
         * (1.0 - par->xs->z(par->pt1/par->z1, par->pt2/z2, par->y1, par->y2));
         
     /*result = par->xs->dSigma(par->pt1/par->z1, par->pt2/z2, par->y1, par->y2, par->phi,
@@ -714,7 +489,7 @@ double dSigma_full_helperf_z2(double z2, void* p)
             *  frag_g_pi0_z2;
     }
     result += (par->pt_interpolator_rev->Evaluate(par->pt2/z2, par->pt1/par->z1)
-            + 0*par->pt_interpolator_rev_cor->Evaluate(par->pt2/z2, par->pt1/par->z1) )
+            + 0/**par->pt_interpolator_rev_cor->Evaluate(par->pt2/z2, par->pt1/par->z1)*/ )
         * (1.0 - par->xs->z(par->pt2/z2, par->pt1/par->z1, par->y2, par->y1))   
         * xf_frag2;
     /*result += par->xs->dSigma(par->pt2/z2, par->pt1/par->z1, par->y2, par->y1, par->phi,
@@ -1029,12 +804,14 @@ CrossSection2::CrossSection2(AmplitudeLib* N_, PDF* pdf_,FragmentationFunction* 
     ptinterpolator2d_rev_correction = NULL;
 
     //for (double pt = 1; pt<=9.5; pt+=0.5)
-    for (double pt=1; pt<=4; pt+=1)
+    for (double pt=1; pt<=7; pt+=1)
     {
         ptvals.push_back(pt);
         std::stringstream s; s << pt;
         ptstrings.push_back(s.str());
     }
+
+    apply_corrections = false;
 }
 
 
@@ -1125,4 +902,255 @@ Interpolator2D * CrossSection2::Ptinterpolator2d()
 Interpolator2D * CrossSection2::Ptinterpolator2d_rev()
 {
     return ptinterpolator2d_rev;
+}
+
+
+ // The following peace of code is so ugly it is hidden at the bottom of this
+ // huge file. Sry.
+/*
+ * Load \Delta \phi data from files pt1_#_pt2_#_y1_#_y2_#, interpolate in pt and phi
+ * Integrate over kinematical variables z_1,z_2 to take into account
+ * hadronization
+ *
+ * The given ptinterpolator2d is used to save the 2d interpolator
+ *
+ * Returns 0 if no error occurred, otherwise <0
+ */
+int CrossSection2::LoadPtData(double y1, double y2)
+{
+   // Load datafiles 
+   // Generate interpolators
+
+    std::stringstream tmp;
+    std::string y1str, y2str;
+    tmp << y1; y1str = tmp.str();
+    std::stringstream tmp2; 
+    tmp2 << y2; y2str = tmp2.str();   
+
+    for (uint i=0; i<ptinterpolators.size(); i++)
+    {
+        for (uint j=0; j<ptinterpolators[i].size(); j++)
+        {
+            delete ptinterpolators[i][j];
+            delete ptinterpolators_rev[i][j];
+        }
+        ptinterpolators[i].clear();
+        ptinterpolators_rev[i].clear();
+    }
+    ptinterpolators.clear();
+    ptinterpolators_rev.clear();
+    for (uint i=0; i<ptinterpolators_correction.size(); i++)
+    {
+        for (uint j=0; j<ptinterpolators_correction[i].size(); j++)
+        {
+            delete ptinterpolators_correction[i][j];
+            delete ptinterpolators_rev_correction[i][j];
+        }
+        ptinterpolators_correction[i].clear();
+        ptinterpolators_rev_correction[i].clear();
+    }
+    ptinterpolators_correction.clear();
+    ptinterpolators_rev_correction.clear();
+
+    //std::string fileprefix = "rhic_vertailu_4y/cyrille_";
+    string fileprefix = "rhic_central/";
+    string fileprefix_cor = "rhic_korjaus_central/";
+
+   int points=ptvals.size();
+   for (int pt1ind=0; pt1ind<points; pt1ind++)
+   {
+       std::vector<Interpolator*> tmpinterpolators;
+       std::vector<Interpolator*> tmpinterpolators_rev;
+       std::vector<Interpolator*> tmpinterpolators_cor;
+       std::vector<Interpolator*> tmpinterpolators_rev_cor;
+       for (int pt2ind=0; pt2ind<points; pt2ind++)
+       {
+            std::stringstream fname, fname_rev, fname_cor, fname_rev_cor;
+            /*fname << fileprefix << "pt1_" << ptstrings[pt1ind] << "_pt2_"
+                << ptstrings[pt2ind] << "_y1_" << y1str << "_y2_" << y2str;
+            fname_rev << fileprefix << "pt1_" << ptstrings[pt2ind] << "_pt2_"
+                << ptstrings[pt1ind] << "_y1_" << y2str << "_y2_" << y1str;
+              */  
+            fname << fileprefix << "y1_" << y1str <<"_y2_" << y2str << "/cyrille_pt1_"
+                << ptstrings[pt1ind] <<"_pt2_" << ptstrings[pt2ind];
+            fname_rev << fileprefix << "y1_" << y2str <<"_y2_" << y1str << "/cyrille_pt1_"
+                << ptstrings[pt1ind] <<"_pt2_" << ptstrings[pt2ind];
+
+            fname_cor << fileprefix_cor << "korjaus_pt1_" << ptstrings[pt1ind] << "_pt2_" << ptstrings[pt2ind]
+                << "_y1_" << y1str <<"_y2_" << y2str;
+            fname_rev_cor << fileprefix_cor  << "korjaus_pt1_" << ptstrings[pt1ind] << "_pt2_" << ptstrings[pt2ind]
+                << "_y1_" << y2str <<"_y2_" << y1str;
+            //cout << "# Loading files " << fname.str() << " and " << fname_rev.str() << endl;
+            
+            std::ifstream file(fname.str().c_str());
+            std::ifstream file_rev(fname_rev.str().c_str());
+            
+            if (!file.is_open() or !file_rev.is_open() )
+            {
+                cerr << "Can't open file " << fname.str() << " or " << fname_rev.str()
+                    << " " << LINEINFO << endl;
+                return -1;
+            }
+            std::vector<double> dphi;
+            std::vector<double> dphi_rev;
+            std::vector<double> xs;
+            std::vector<double> xs_rev;
+
+            std::vector<double> dphi_cor;
+            std::vector<double> dphi_rev_cor;
+            std::vector<double> xs_cor;
+            std::vector<double> xs_rev_cor;
+            while(!file.eof())
+            {
+                string line;
+                getline(file, line);
+                if (line.substr(0,1)!="#" and line.length()>3)  // not comment/empty
+                {
+                    std::istringstream iss(line);
+                    string angle,val;
+                    iss >> angle; iss >> val;
+                    xs.push_back(StrToReal(val));
+                    dphi.push_back(StrToReal(angle));
+                }
+            }
+            while (!file_rev.eof())
+            {
+                string line;
+                getline(file_rev, line);
+                if (line.substr(0,1)!="#" and line.length()>3)  // not comment/empty
+                {
+                    std::istringstream iss(line);
+                    string angle,val;
+                    iss >> angle; iss >> val;
+                    xs_rev.push_back(StrToReal(val));
+                    dphi_rev.push_back(StrToReal(angle));
+                }
+            }
+            if (apply_corrections)
+            {
+                std::ifstream file_cor(fname_cor.str().c_str());
+                std::ifstream file_rev_cor(fname_rev_cor.str().c_str());
+                
+                if (!file.is_open() or !file_rev.is_open() )
+                {
+                    cerr << "Can't open file " << fname_cor.str() << " or " << fname_rev_cor.str()
+                        << " " << LINEINFO << endl;
+                    return -1;
+                }
+            
+                while(!file_cor.eof())
+                {
+                    string line;
+                    getline(file_cor, line);
+                    if (line.substr(0,1)!="#" and line.length()>3)  // not comment/empty
+                    {
+                        std::istringstream iss(line);
+                        string angle,val;
+                        iss >> angle; iss >> val;
+                        xs_cor.push_back(StrToReal(val));
+                        dphi_cor.push_back(StrToReal(angle));
+                    }
+                }
+                while (!file_rev_cor.eof())
+                {
+                    string line;
+                    getline(file_rev_cor, line);
+                    if (line.substr(0,1)!="#" and line.length()>3)  // not comment/empty
+                    {
+                        std::istringstream iss(line);
+                        string angle,val;
+                        iss >> angle; iss >> val;
+                        xs_rev_cor.push_back(StrToReal(val));
+                        dphi_rev_cor.push_back(StrToReal(angle));
+                    }
+                }
+                file_cor.close();
+                file_rev_cor.close();
+            }
+
+
+            file.close();
+            file_rev.close();
+
+            if (xs.size()<2 or xs_rev.size()<2)
+            {
+                cerr << "Datafile without valid datapoints, filename " <<
+                    fname.str() << " or " << fname_rev.str()
+                    << " or " << fname_cor.str() << " or " << fname_rev_cor.str()
+                    << " " << LINEINFO << endl;
+                return -1;
+            }
+
+            // Mirror \dphi if necessary
+            if (dphi[dphi.size()-1] < 1.01*M_PI)
+            {
+                for (int i=dphi.size()-2; i>=0; i--)
+                {
+                    dphi.push_back(M_PI + (M_PI-dphi[i]) );
+                    xs.push_back(xs[i]);
+                }
+            }
+            // Mirror \dphi if necessary
+            if (dphi_rev[dphi_rev.size()-1] < 1.01*M_PI)
+            {
+                for (int i=dphi_rev.size()-2; i>=0; i--)
+                {
+                    dphi_rev.push_back(M_PI + (M_PI-dphi_rev[i]) );
+                    xs_rev.push_back(xs_rev[i]);
+                }
+            }
+            if (apply_corrections)
+            {
+                if (dphi_cor[dphi_cor.size()-1] < 1.01*M_PI)
+                {
+                    for (int i=dphi_cor.size()-2; i>=0; i--)
+                    {
+                        dphi_cor.push_back(M_PI + (M_PI-dphi_cor[i]) );
+                        xs_cor.push_back(xs_cor[i]);
+                    }
+                }
+                // Mirror \dphi if necessary
+                if (dphi_rev[dphi_rev_cor.size()-1] < 1.01*M_PI)
+                {
+                    for (int i=dphi_rev_cor.size()-2; i>=0; i--)
+                    {
+                        dphi_rev_cor.push_back(M_PI + (M_PI-dphi_rev_cor[i]) );
+                        xs_rev_cor.push_back(xs_rev_cor[i]);
+                    }
+                }
+
+                Interpolator *tmpinterp_cor = new Interpolator(dphi_cor, xs_cor);
+                tmpinterp_cor->Initialize();
+                tmpinterpolators_cor.push_back(tmpinterp_cor);
+
+                Interpolator *tmpinterp_rev_cor = new Interpolator(dphi_rev_cor, xs_rev_cor);
+                tmpinterp_rev_cor->Initialize();
+                tmpinterpolators_rev_cor.push_back(tmpinterp_rev_cor);
+            
+            }
+            
+
+            Interpolator *tmpinterp = new Interpolator(dphi, xs);
+            tmpinterp->Initialize();
+            tmpinterpolators.push_back(tmpinterp);
+
+            Interpolator *tmpinterp_rev = new Interpolator(dphi_rev, xs_rev);
+            tmpinterp_rev->Initialize();
+            tmpinterpolators_rev.push_back(tmpinterp_rev);
+
+
+        }
+        ptinterpolators.push_back(tmpinterpolators);
+        ptinterpolators_rev.push_back(tmpinterpolators_rev);
+        if (apply_corrections)
+        {
+            ptinterpolators_correction.push_back(tmpinterpolators_cor);
+            ptinterpolators_rev_correction.push_back(tmpinterpolators_rev_cor);
+        }
+   }
+   //cout << "# Data loaded" << endl;
+
+  
+
+    return 0;
 }

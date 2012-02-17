@@ -5,7 +5,7 @@
  *
  * SYNOPSIS
  *   void vegas(double regn[], int ndim, void (*fxn)(double x[], double f[]),
- *              int init, unsigned long , int itmx, int nprn,
+ *              int init, unsigned long long ncall, int itmx, int nprn,
  *              int fcns, int pdim, int wrks,
  *              double tgral[], double sd[], double chi2a[]);
  *
@@ -88,7 +88,7 @@
 static int mds;              /* ==1: statified smpl. (see README)  (mds)     */
 int nd;                      /* slices in grid (c.f. NDMX)         (nd)      */
 int ng;                      /*                                    (ng)      */
-int npg;                     /* number of calls within bin         (npg)     */
+unsigned long long int npg;                     /* number of calls within bin         (npg), H.M: added unsigned long long   */
 int ndim_par;                /* dimensionality of parallel space             */
 int gndim;                   /* global copy of ndim                          */
 double dxg;                  /*                                    (dxg)     */
@@ -440,7 +440,8 @@ void vegas(double regn[], int ndim, void (*fxn)(double x[], double f[], void* p)
     npg = (ncall/k>2) ? (ncall/k) : (2);
     calls = (double)npg * (double)k;
     dxg = 1.0/ng;
-    for (dv2g=1,i=0; i<ndim; i++) dv2g *= dxg;
+
+    for (dv2g=1,i=0; i<ndim; i++) dv2g *= dxg;    
     dv2g = calls*calls*dv2g*dv2g/npg/npg/(npg-1.0);
     xnd = nd;
     dxg *= xnd;
@@ -557,9 +558,10 @@ void vegas(double regn[], int ndim, void (*fxn)(double x[], double f[], void* p)
       Ab[j].tsi = sqrt(Ab[j].tsi);
     }
     wgt = Ai[0].Wgt;
+    /* Changed by H.M: prints also relerr */
     if (!p_rank && nprn & NPRN_RESULT) {
-      printf("# %s %3d : integral = %14.7g +/-  %9.2g\n",
-             " iteration no.",it,Ab[0].ti,Ab[0].tsi);
+      printf("# %s %3d : integral = %14.7g +/-  %9.2g  (relerr %9.2g)\n",
+             " iteration no.",it,Ab[0].ti,Ab[0].tsi, fabs(Ab[0].tsi/Ab[0].ti));
       printf("# %s integral =%14.7g+/-%9.2g  chi^2/IT n = %9.2g\n",
              " all iterations:  ",tgral[0],sd[0],chi2a[0]);
     }

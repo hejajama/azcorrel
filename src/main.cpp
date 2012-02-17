@@ -208,9 +208,9 @@ int main(int argc, char* argv[])
     double normalization = 1;//cross_section.Sigma(pt1, pt2, y1, y2, sqrts);
     //cout << "# Normalization totxs " << normalization << endl;
     //cout << "# Theta=2.5 " << cross_section.dSigma(pt1,pt2,y1,y2,2.5,sqrts) << endl;
-    int points=6;
+    int points=8;
     if (phi>-0.5) points=1;    // calculate only given angle
-    double minphi = 2.9;
+    double minphi = 1;
     //double maxphi=2.0*M_PI-minphi;
     double maxphi=M_PI;
     

@@ -43,8 +43,8 @@ double Inthelperf_correction2(double* vec, size_t dim, void* p);
 void pVegas_wrapper(double x[6], double f[1], void* par);
 double NormalizeAngle(double phi);
 
-bool cyrille=true; 
-bool correction=false;
+bool cyrille=false; 
+bool correction=true;
 
 /*
  * Calculates the correction term/full integral over 6-dim. hypercube
@@ -75,8 +75,8 @@ double CrossSection2::CorrectionTerm(double pt1, double pt2, double ya, double p
     // pt1=k, pt2=q
 
     N->SetOutOfRangeErrors(false);
-    double minr=std::log(0.005); double maxr=std::log(10000);
-    //double minr=0; double maxr=2000;
+    double minr=std::log(0.001); double maxr=std::log(100);
+    //double minr=0; double maxr=100;
 
     double (*integrand)(double*,size_t,void*) = Inthelperf_correction2;
     //cout <<"# Integrand is full" << endl;
@@ -270,7 +270,7 @@ double CrossSection2::CorrectionTerm(double pt1, double pt2, double ya, double p
         cout << "# First round at " << std::ctime(&t) ;
     }
     vegas(reg, dim, pVegas_wrapper,
-        0, mcintpoints/100, 5,  NPRN_RESULT,
+        0, mcintpoints/100, 5,  0,
         functions, 0, workers,
         estim, std_dev, chi2a, &helper);
 
@@ -313,10 +313,10 @@ double CrossSection2::CorrectionTerm(double pt1, double pt2, double ya, double p
         << " relerr " << std_dev[0]/estim[0] << " time "
        << (std::time(NULL)-start)/60.0/60.0 << " h"<< endl;
 
-        if (std::abs(std_dev[0]/estim[0]) > 0.1)
+        if (std::abs(std_dev[0]/estim[0]) > 0.05)
         {
             cout << "#!!!!!!!!!!!!!!! INTEGRAL DOESN'T CONVERGE!?!?!?" << endl;
-            cerr <<"INTEGRLA DOESN'T CONVERTE! phi=" << phi
+            cerr <<"INTEGRAL DOESN'T CONVERTE! phi=" << phi
                 << " result: " << estim[0] << " +/- " << std_dev[0]
                 << " relerr " << std::abs(std_dev[0]/estim[0]) << " pt1 " << pt1 << " pt2 "
                 << pt2 << " z " << z << endl;
@@ -413,18 +413,21 @@ double Inthelperf_correction(double* vec, size_t dim, void* p)
         double nom2 = s_u1*s_u2; //N->S(u1, y)*N->S(u2, y);
         double denom2 = denom1; // optimize, same as before, N->S(r,y)*N->S(u1u2r,y);
         double f1f2=0;
-        if (nom2 <= 0 or denom2 <= 0 or
+        /*if (nom2 <= 0 or denom2 <= 0 or
             std::abs(nom2/denom2-1.0) < minsprod or nom1 <= 0)
                 f1f2 = 0;
         else
             f1f2 = std::log(nom1/denom1) / std::log(nom2/denom2);
-        result -= f1f2*s_u1u2r*(s_u1*s_u2 - s_r*s_u1u2r);
+            */
+        f1f2 = std::log(nom1/denom1) / std::log(nom2/denom2);
+        if (!isnan(f1f2) and !isinf(f1f2))        
+            result -= f1f2*s_u1u2r*(s_u1*s_u2 - s_r*s_u1u2r);
     }
-    // 3-point functions
-    // -S(u)S(u+r-zu') - S(u')S(u'-r-zu)
     
     if (cyrille)
     {
+        // 3-point functions
+        // -S(u)S(u+r-zu') - S(u')S(u'-r-zu)
         result += -s_u1*N->S(
             sqrt( SQR(u1) + SQR(r) + SQR(z*u2) + 2.0*u1_dot_r - 2.0*z*u1_dot_u2
                 - 2.0*z*u2_dot_r) , y)
@@ -550,10 +553,10 @@ double Inthelperf_correction2(double* vec, size_t dim, void* p)
             ) * s_r;
     }
 
-
+   /*
     if (correction)
     {
-        double correction=0;
+        double cor=0;
 
         // |r - z(u-u')|
         double r_m_z_u1u2 = std::sqrt( SQR(r) + SQR(z)*(SQR(u1)+SQR(u2)-2.0*u1_dot_u2)
@@ -579,33 +582,42 @@ double Inthelperf_correction2(double* vec, size_t dim, void* p)
 
         double f2 = s_u1*s_u2 / ( s_r_m_zu1u2 * s_r_p_1mz_u1u2);
 
-        if (std::abs(f2-1.0) < 1e-30 or f1<1e-30 or f2<1e-30 or
-            s_r_m_1mz_u2_m_zu1 * s_r_p_1mz_u_p_zu2 < 1e-10 )    // r >> u,u', log/log->0
-            correction=0;
-        else
-        {
+        
+        //if (std::abs(f2-1.0) < 1e-30 or f1<1e-30)    // u=u'=r
+        //{
+        //    cor=0;
+        //}
+        //else
+        //{
 
-            correction = std::log(f1)/std::log(f2) * s_r_p_1mz_u1u2
+            cor = std::log(f1)/std::log(f2) * s_r_p_1mz_u1u2
                 *( s_u1*s_u2 - s_r_m_zu1u2 * s_r_p_1mz_u1u2 );
 
-            correction *= std::cos(-pt1_dot_r - pt2_dot_r + (1.0-z)*(pt1_dot_u2 - pt1_dot_u1)
-                    - z*(pt2_dot_u2 - pt2_dot_u1) );
+            if (isnan(cor) or isinf(cor))
+            {
+                //cerr << "naninf " << "??, u1: " << u1 << " u2 " << u2 << " r " << r << " f1 " << f1
+                //<< " f2 " << f2 << "r_m_1mz_u2_m_zu1" << r_m_1mz_u2_m_zu1 << " s " << s_r_m_1mz_u2_m_zu1 << endl;
+                cor = 0;
+            }
+            else
+            {
+                cor *= std::cos(-pt1_dot_r - pt2_dot_r + (1.0-z)*(pt1_dot_u2 - pt1_dot_u1)
+                        - z*(pt2_dot_u2 - pt2_dot_u1) );
+            }
 
-            if (isnan(correction) or isinf(correction))
-                return 0;
-            
-            result -=correction;
-        }
+            result -=cor;
+        //}
+        
     }
-    
+        */
+
     /*
     if (correction)
     {
-        double cor=0;
+        // r + u
+        double r_p_u1 = std::sqrt(SQR(r) + SQR(u1) + 2.0*u1_dot_r);
         // r - u2
-        double r_m_u2 = std::sqrt(SQR(r) + SQR(u2) - 2.0*u2_dot_r);
-        // r+u
-        double r_p_u1 = std::sqrt(SQR(r)+SQR(u1) + 2.0*u1_dot_r);
+        double r_m_u2 = std::sqrt(SQR(r)+SQR(u2) - 2.0*u2_dot_r);
         // r+u-u2
         double r_p_u1_m_u2 = std::sqrt(SQR(r) + (SQR(u1)+SQR(u2)-2.0*u1_dot_u2)
                             + 2.0*(u1_dot_r - u2_dot_r) );
@@ -615,15 +627,60 @@ double Inthelperf_correction2(double* vec, size_t dim, void* p)
         double f2 = s_u1*s_u2/(s_r*s_r_p_u1_m_u2);
 
         double loglog = std::log(f1)/std::log(f2);
-        if (isinf(loglog) or isnan(loglog))
-            cor=0;
-        else
-            cor = s_r_p_u1_m_u2 * loglog;
-        result -= cor*std::cos( -pt2_dot_r - pt1_dot_r - pt1_dot_u1 + pt1_dot_u2 );
-
+        /*if (std::abs(f1-f2)<1e-40 and s_r_p_u1_m_u2>0)
+        {
+            //cerr << "1?? u1 " << u1 << " u2 " << u2 << " r " << r << " f1 " << f1 <<"\n";
+            loglog=1;
+        }
+        else*//* if (isinf(loglog) or isnan(loglog))
+            loglog=0;
+        
+        result -= s_r_p_u1_m_u2 * loglog * (s_u1*s_u2 - s_r*s_r_p_u1_m_u2)
+            * std::cos( -pt1_dot_r - pt2_dot_r + pt1_dot_u2 - pt1_dot_u1 );
+     
     }*/
+    
+    
+    if (correction)
+    {
+        // r - u
+        double r_m_u1 = std::sqrt(SQR(r) + SQR(u1) - 2.0*u1_dot_r);
+        double s_r_m_u1 = N->S(r_m_u1, y);
+        // r + u'
+        double r_p_u2 = std::sqrt(SQR(r) + SQR(u2) + 2.0*u2_dot_r);
+        double s_r_p_u2 = N->S(r_p_u2, y);
+        // r - u + u' = r + (u'-u)
+        double r_m_u1_p_u2 = std::sqrt( SQR(r) + (SQR(u1) + SQR(u2) - 2.0*u1_dot_u2)
+                    + 2.0*(u2_dot_r - u1_dot_r) );
+        double s_r_m_u1_p_u2 = N->S(r_m_u1_p_u2, y);
 
-  
+    
+        double f1 = s_r_m_u1 * s_r_p_u2 / (s_r_m_u1_p_u2 * s_r);
+        double f2 = s_u1 * s_u2 / (s_r_m_u1_p_u2 * s_r);
+        double loglog=0;
+        if (std::abs(s_r_m_u1 * s_r_p_u2 - s_u1*s_u2) < 1e-30)
+        {
+            loglog=1.0;
+            /*if (std::abs(s_u1 * s_u2 - s_r * s_r_m_u1_p_u2) > 1e-3 )
+            cout << "u1 " << u1 << " u2 " << u2 << " r " << r << " ukulma " << theta2-theta1
+                << " f1 " << f1 << " f2 " << f2 << " s_r_m_u1_p_u2 " << s_r_m_u1_p_u2 <<
+                " loput " << s_u1 * s_u2 - s_r * s_r_m_u1_p_u2 <<  endl;
+                */
+        }
+        else loglog = std::log(f1) / std::log(f2);
+        if (isnan(loglog) or isinf(loglog))
+            loglog=0;
+        
+
+        /*double nom = std::log(s_r_m_u1) + std::log(s_r_p_u2) - std::log(s_r_m_u1_p_u2) - std::log(s_r);
+        double denom = std::log(s_u1) + std::log(s_u2) - std::log(s_r_m_u1_p_u2) - std::log(s_r);
+        double loglog = nom/denom;
+        if (isinf(loglog) or isnan(loglog)) loglog=0;
+        */
+        result -= s_r * loglog * (s_u1 * s_u2 - s_r * s_r_m_u1_p_u2)
+                * cos( -pt1_dot_r - pt2_dot_r - pt2_dot_u2 + pt2_dot_u1 );
+
+    }
     
     // Wave function product
     // \phi^*(u2) \phi(u) summed over spins and polarization
@@ -651,6 +708,8 @@ double Inthelperf_correction2(double* vec, size_t dim, void* p)
         cerr << "NAN!\n";
 
     result *= u1*u2*r;   // d^2 u_1 d^2 u2 d^2 r = du_1 du_2 dr u_1 u_2 u_3 d\theta_i
+
+    //cout << u1 << " " << u2 << " " << r << " " << result << endl;
     
     //double max=500;
     //if ((u1>max or u2>max or r>max) and std::abs(result)>1e-20)
@@ -686,7 +745,7 @@ void CrossSection2::SetMCIntPoints(unsigned long long points)
 const int RINTPOINTS = 4;
 const int THETAINTPOINTS = 2;
 const double MINLNR = std::log(1e-3);
-const double MAXLNR = std::log(50);
+const double MAXLNR = std::log(500);
 
 double Inthelperf_thetar(double thetar, void* p)
 {
@@ -695,7 +754,7 @@ double Inthelperf_thetar(double thetar, void* p)
     double vec[6] = {par->u1, par->u2, par->r, par->theta1, par->theta2,
         thetar };
     
-    return Inthelperf_correction(vec, 6, par);
+    return Inthelperf_correction2(vec, 6, par);
 }
 
 double Inthelperf_theta2(double theta2, void* p)
