@@ -49,6 +49,8 @@ class CrossSection2
         PDF* Pdf();
         FragmentationFunction* FragFun();
 
+        AmplitudeLib* GetN();
+
         Interpolator2D *Ptinterpolator2d();
         Interpolator2D *Ptinterpolator2d_rev();
 
@@ -68,8 +70,8 @@ class CrossSection2
         PDF* pdf;
         FragmentationFunction* fragfun;
         
-        double gcacheval, gcachek;
-        double fcacheval, fcachek;
+        double gcacheval, gcachek, gcachex, gcachez;
+        double hcacheval, hcachek, hcachex, hcachez;
 
         //FFT
         std::complex<double> *data,*transform;

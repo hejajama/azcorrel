@@ -101,9 +101,8 @@ double CrossSection2::dSigma(double pt1, double pt2, double y1, double y2, doubl
         }
     }
     */
-    g = G(pt2, tmpxa, tmpz); h=H(pt2, tmpxa, tmpz);
     f=N->S_k(delta, ya)/SQR(2.0*M_PI);
-
+    g = G(pt2, tmpxa, tmpz); h=H(pt2, tmpxa, tmpz);
 
     // \kappa^2 = (k - z\delta)^2 = (1-z)^2 pt1^2 + z^2 pt2^2 - 2*z*(1-z)*pt1*pt2*cos \phi
     double kzdeltasqr = SQR(1.0-tmpz)*SQR(pt1) + SQR(tmpz*pt2) - 2.0*tmpz*(1.0-tmpz)
@@ -145,10 +144,10 @@ double CrossSection2::dSigma(double pt1, double pt2, double y1, double y2, doubl
 
     // CorrectionTerm returns -1 if the integral doesn't converge
     
-    double correction = CorrectionTerm(pt1,pt2,ya,phi,tmpz);
+    //double correction = CorrectionTerm(pt1,pt2,ya,phi,tmpz);
     //if (std::abs(correction+1.0)<0.001) return -1;
    	//result +=correction;
-    result = correction;
+    //result = correction;
     
     /*result = CorrectionTerm_fft(pt1, pt2, ya, phi);
     #pragma omp critical
@@ -338,6 +337,7 @@ double dSigma_full_helperf_z1(double z1, void* p);
 double dSigma_full_helperf_z2(double z2, void* p);
 
 const int PTINT_INTERVALS=3;
+const int ZINT_INTERVALS=3;
 
 /*
  * Calculate dN/d^2 p_1 d^2 p_2 dy_1 dy_2, integrated over z1 and z2
@@ -369,9 +369,9 @@ double CrossSection2::dSigma_full(double pt1, double pt2, double y1, double y2,
 
     double result,abserr;
     gsl_integration_workspace *workspace 
-     = gsl_integration_workspace_alloc(PTINT_INTERVALS);
+     = gsl_integration_workspace_alloc(ZINT_INTERVALS);
     int status = gsl_integration_qag(&f, x1, 1.0,
-            0, 0.01, PTINT_INTERVALS, GSL_INTEG_GAUSS15, workspace,
+            0, 0.01, ZINT_INTERVALS, GSL_INTEG_GAUSS21, workspace,
             &result, &abserr);
     gsl_integration_workspace_free(workspace);
     
@@ -381,7 +381,7 @@ double CrossSection2::dSigma_full(double pt1, double pt2, double y1, double y2,
     */
 
     result *= ALPHAS * Cf / (4.0*SQR(M_PI)); // NB! \int d^2b = S_T is dropped as it
-    // should cancel, doesn't work anymore if we calculated something b-dependent!!!!
+    // should cancel, wouldn't work anymore if we calculated something b-dependent!!!!
 
     return result;
 }
@@ -395,9 +395,14 @@ double dSigma_full_helperf_z1(double z1, void* p)
 
     double result,abserr;
     gsl_integration_workspace *workspace 
-     = gsl_integration_workspace_alloc(PTINT_INTERVALS);
-    int status = gsl_integration_qag(&f, par->x2,1.0,
-            0, 0.01, PTINT_INTERVALS, GSL_INTEG_GAUSS15, workspace,
+     = gsl_integration_workspace_alloc(ZINT_INTERVALS);
+    double minz2 = par->x2*z1/(z1-par->x1);
+    if (minz2>1) return 0;
+    /*int status = gsl_integration_qag(&f, par->x2,1.0,
+            0, 0.01, ZINT_INTERVALS, GSL_INTEG_GAUSS21, workspace,
+            &result, &abserr);*/
+    int status = gsl_integration_qag(&f, minz2,1.0,
+            0, 0.01, ZINT_INTERVALS, GSL_INTEG_GAUSS21, workspace,
             &result, &abserr);
     gsl_integration_workspace_free(workspace);
     
@@ -424,7 +429,9 @@ double dSigma_full_helperf_z2(double z2, void* p)
             << " " << LINEINFO << endl;
 
     double xh = par->xs->xh(par->pt1/par->z1, par->pt2/z2, par->y1, par->y2, par->sqrts);
-
+    /*double xa = par->xs->xa(par->pt1/par->z1, par->pt2/z2, par->y1, par->y2, par->sqrts);
+    par->xs->GetN()->InitializeInterpolation(std::log(par->xs->GetN()->X0()/xa));
+    */
     double xf_u = par->xs->Pdf()->xq(xh, qscale, U);
     double xf_d = par->xs->Pdf()->xq(xh, qscale, D);
 
@@ -439,13 +446,14 @@ double dSigma_full_helperf_z2(double z2, void* p)
     // Evaluate(gluon momentum, quark momentum)
     result =
         (par->pt_interpolator->Evaluate(par->pt1/par->z1, par->pt2/z2)
-        + 0/**par->pt_interpolator_cor->Evaluate(par->pt1/par->z1, par->pt2/z2)*/ )
+        //+ 0 * par->pt_interpolator_cor->Evaluate(par->pt1/par->z1, par->pt2/z2)
+        )
         * (1.0 - par->xs->z(par->pt1/par->z1, par->pt2/z2, par->y1, par->y2));
-        
-    /*result = par->xs->dSigma(par->pt1/par->z1, par->pt2/z2, par->y1, par->y2, par->phi,
+      
+    /*double result2 = par->xs->dSigma(par->pt1/par->z1, par->pt2/z2, par->y1, par->y2, par->phi,
             par->sqrts, false)
             *(1.0 - par->xs->z(par->pt1/par->z1, par->pt2/z2, par->y1, par->y2)) ; 
-      */      
+    */
     double xf_frag1 = 
           xf_u
             * frag_u_pi0_z2
@@ -467,6 +475,7 @@ double dSigma_full_helperf_z2(double z2, void* p)
             *  frag_g_pi0_z1;
     }
     result *= xf_frag1;
+    //result2 *= xf_frag1;
 
 
     // exchange pt1<->pt2
@@ -489,24 +498,29 @@ double dSigma_full_helperf_z2(double z2, void* p)
             *  frag_g_pi0_z2;
     }
     result += (par->pt_interpolator_rev->Evaluate(par->pt2/z2, par->pt1/par->z1)
-            + 0/**par->pt_interpolator_rev_cor->Evaluate(par->pt2/z2, par->pt1/par->z1)*/ )
+            //+ 0 *par->pt_interpolator_rev_cor->Evaluate(par->pt2/z2, par->pt1/par->z1)
+            )
         * (1.0 - par->xs->z(par->pt2/z2, par->pt1/par->z1, par->y2, par->y1))   
         * xf_frag2;
-    /*result += par->xs->dSigma(par->pt2/z2, par->pt1/par->z1, par->y2, par->y1, par->phi,
+    /*
+    result2 += par->xs->dSigma(par->pt2/z2, par->pt1/par->z1, par->y2, par->y1, par->phi,
             par->sqrts, false)
             *(1.0 - par->xs->z(par->pt2/z2, par->pt1/par->z1, par->y2, par->y1))
             * xf_frag2 ; 
     */
+    /*
 
    /*cerr << "pt1/z1 " << par->pt1/par->z1 << " pt2/z2 " << par->pt2/z2 << " amp1 "
     << par->pt_interpolator->Evaluate(par->pt1/par->z1, par->pt2/z2)
         << " amp2 " << par->pt_interpolator->Evaluate(par->pt2/z2, par->pt1/par->z1) << endl;
 
     */
-
-    //cout << par->z1 << " " << z2 << " " << result << endl;
-    return result;
-    //return result/SQR(par->z1*z2);
+/*
+    if (std::abs(result-result2)/result > 0.1 or std::abs(result-result2)/result2 > 0.1)
+        cerr << "HUGE DIFFERENCE " << std::abs(result-result2)/result << " k: " << par->pt1/par->z1 << " q " << par->pt2/z2 << endl;
+    //cout << par->z1 << " " << z2 << " " << result/SQR(par->z1*z2) << endl;
+*/
+    return result/SQR(par->z1*z2);
 }
 
 /*
@@ -582,27 +596,28 @@ double CrossSection2::dSigma_integrated(double minpt1, double minpt2, double min
                     << " relerr " << std::abs(abserr/intresult) << " phi: " << phi << "\n";
             }
 
-            if (y2ind==1) y2intres += 4.0*intresult;
+            /*if (y2ind==1) y2intres += 4.0*intresult;
             else y2intres += intresult;
-            /*
+            */
             if (y2ind==1 or y2ind == 3) y2intres += 4.0*intresult;
             else if (y2ind==2) y2intres += 2.0*intresult;
-            else y2intres += intresult;*/
+            else y2intres += intresult;
         }
-        y2intres *= (maxy-miny)/6.0;
-        if (y1ind==1) result += 4.0*y2intres;
+        //y2intres *= (maxy-miny)/6.0;
+        y2intres *= (maxy-miny)/12.0;
+        /*if (y1ind==1) result += 4.0*y2intres;
         else result += y2intres;
+        */
         
-        /*
         y2intres *= (maxy-miny)/12.0;
         if (y1ind==1 or y1ind==3) result += 4.0*y2intres;
         else if (y1ind==2) result += 2.0*y2intres;
         else result += y2intres;
-        */
+        
         
     }
-    result *= (maxy-miny)/6.0;
-    //result *= (maxy-miny)/12.0;
+    //result *= (maxy-miny)/6.0;
+    result *= (maxy-miny)/12.0;
     
     return result*2.0*M_PI; //2pi from one angular integral
 }
@@ -703,8 +718,8 @@ struct G_helper { double y; AmplitudeLib* N; double kt; double z; CrossSection2 
 double G_helperf(double r, void* p);
 double CrossSection2::G(double kt, double x, double z)
 {
-    //if (std::abs(kt - gcachek) < 0.001)
-    //    return gcacheval;
+    if ( std::abs(kt - gcachek) < 0.001 and std::abs(x/gcachex-1.0) < 0.001 and std::abs(z-gcachez) < 0.001)
+        return gcacheval;
     
     G_helper helper;
     helper.y = std::log(N->X0()/x);
@@ -714,7 +729,8 @@ double CrossSection2::G(double kt, double x, double z)
     init_workspace_fourier(FOURIER_ZEROS);   // number of bessel zeroes, max 2000
 
     double result = fourier_j1(std::abs(kt), G_helperf, &helper);
-    gcachek=kt; gcacheval=result;
+    gcachek=kt; gcachex = x; gcachez = z;
+    gcacheval=result;
     return result;
 
 }
@@ -752,7 +768,9 @@ double G_helperf(double r, void *p)
 double H_helperf(double r, void* p);
 double CrossSection2::H(double kt, double x, double z)
 {
-    //TODO: Cache?
+    if (std::abs(kt - gcachek) < 0.001 and std::abs(x/hcachex-1.0) < 0.001 and std::abs(z-hcachez) < 0.001)
+        return hcacheval;
+        
     if (M_Q() < 1e-5) return 0;
     G_helper helper;
     helper.y = std::log(N->X0()/x);
@@ -762,7 +780,10 @@ double CrossSection2::H(double kt, double x, double z)
     init_workspace_fourier(700);   // number of bessel zeroes, max 2000
 
     double result = fourier_j0(std::abs(kt), H_helperf, &helper);
-    return M_Q()*SQR(z)*result;
+
+    hcacheval=M_Q()*SQR(z)*result;
+    hcachek=kt; hcachex=x; hcachez=z;
+    return hcacheval;
 
 }
 
@@ -791,8 +812,8 @@ CrossSection2::CrossSection2(AmplitudeLib* N_, PDF* pdf_,FragmentationFunction* 
 {
     N=N_; pdf=pdf_; fragfun=frag;
     gcacheval=-1;
-    gcachek=-1;
-    fcacheval=-1; fcachek=-1;
+    gcachek=-1; gcachex=-1; gcachez=-1;
+    hcacheval=-1; hcachek=-1; hcachex=-1; hcachez=-1;
     transform=NULL;
     mcintpoints=1e7;
     gsl_rng_env_setup();
@@ -804,7 +825,7 @@ CrossSection2::CrossSection2(AmplitudeLib* N_, PDF* pdf_,FragmentationFunction* 
     ptinterpolator2d_rev_correction = NULL;
 
     //for (double pt = 1; pt<=9.5; pt+=0.5)
-    for (double pt=1; pt<=7; pt+=1)
+    for (double pt=1; pt<=7; pt+=0.25)
     {
         ptvals.push_back(pt);
         std::stringstream s; s << pt;
@@ -904,8 +925,12 @@ Interpolator2D * CrossSection2::Ptinterpolator2d_rev()
     return ptinterpolator2d_rev;
 }
 
+AmplitudeLib* CrossSection2::GetN()
+{
+    return N;
+}
 
- // The following peace of code is so ugly it is hidden at the bottom of this
+ // The following piece of code is so ugly it is hidden at the bottom of this
  // huge file. Sry.
 /*
  * Load \Delta \phi data from files pt1_#_pt2_#_y1_#_y2_#, interpolate in pt and phi
@@ -953,7 +978,7 @@ int CrossSection2::LoadPtData(double y1, double y2)
     ptinterpolators_rev_correction.clear();
 
     //std::string fileprefix = "rhic_vertailu_4y/cyrille_";
-    string fileprefix = "rhic_central/";
+    string fileprefix = "rhic_central_025/";
     string fileprefix_cor = "rhic_korjaus_central/";
 
    int points=ptvals.size();
