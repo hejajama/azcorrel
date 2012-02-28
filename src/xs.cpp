@@ -79,7 +79,8 @@ double CrossSection2::dSigma(double pt1, double pt2, double y1, double y2, doubl
     double ya = std::log(N->X0()/tmpxa);
     if (ya<0)
         cerr << "Negative rapidity interval at " << LINEINFO << endl;
-    //N->InitializeInterpolation(ya);
+    if (!N->InterpolatorInitialized(ya))
+		N->InitializeInterpolation(ya);
     double delta = Delta(pt1,pt2,phi);
 
     double g=0,f=0,h=0;
@@ -144,10 +145,10 @@ double CrossSection2::dSigma(double pt1, double pt2, double y1, double y2, doubl
 
     // CorrectionTerm returns -1 if the integral doesn't converge
     
-    //double correction = CorrectionTerm(pt1,pt2,ya,phi,tmpz);
+    double correction = CorrectionTerm(pt1,pt2,ya,phi,tmpz);
     //if (std::abs(correction+1.0)<0.001) return -1;
    	//result +=correction;
-    //result = correction;
+    result = correction;
     
     /*result = CorrectionTerm_fft(pt1, pt2, ya, phi);
     #pragma omp critical
@@ -350,6 +351,9 @@ double CrossSection2::dSigma_full(double pt1, double pt2, double y1, double y2,
     double x1 = pt1*std::exp(y1)/sqrts;
     double x2 = pt2*std::exp(y2)/sqrts;
 
+    if (x1>1 or x2>1)
+        return 0;     // kinematically forbidden
+    
     dSigma_full_helper helper;
     helper.pt1=pt1; helper.pt2=pt2;
     helper.pt_interpolator = ptinterpolator2d;
@@ -396,7 +400,7 @@ double dSigma_full_helperf_z1(double z1, void* p)
     double result,abserr;
     gsl_integration_workspace *workspace 
      = gsl_integration_workspace_alloc(ZINT_INTERVALS);
-    double minz2 = par->x2*z1/(z1-par->x1);
+    double minz2 = par->x2*z1/(z1+0.00001-par->x1); //minz1=x1, add small eps to force finiteness
     if (minz2>1) return 0;
     /*int status = gsl_integration_qag(&f, par->x2,1.0,
             0, 0.01, ZINT_INTERVALS, GSL_INTEG_GAUSS21, workspace,
@@ -420,7 +424,8 @@ double dSigma_full_helperf_z2(double z2, void* p)
     if (par->x1/par->z1 + par->x2/z2 > 1)
         return 0; 
     if (par->pt1/par->z1 >= par->xs->MaxPt() or par->pt2/z2 >= par->xs->MaxPt())
-        return 0; 
+        return 0;
+
 
     double result=0;
     double qscale = std::max(par->pt1, par->pt2);
@@ -432,6 +437,7 @@ double dSigma_full_helperf_z2(double z2, void* p)
     /*double xa = par->xs->xa(par->pt1/par->z1, par->pt2/z2, par->y1, par->y2, par->sqrts);
     par->xs->GetN()->InitializeInterpolation(std::log(par->xs->GetN()->X0()/xa));
     */
+
     double xf_u = par->xs->Pdf()->xq(xh, qscale, U);
     double xf_d = par->xs->Pdf()->xq(xh, qscale, D);
 
@@ -977,7 +983,7 @@ int CrossSection2::LoadPtData(double y1, double y2)
     ptinterpolators_correction.clear();
     ptinterpolators_rev_correction.clear();
 
-    //std::string fileprefix = "rhic_vertailu_4y/cyrille_";
+    //std::string fileprefix = "rhic_pp/";
     string fileprefix = "rhic_central_025/";
     string fileprefix_cor = "rhic_korjaus_central/";
 
