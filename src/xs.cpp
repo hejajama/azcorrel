@@ -610,7 +610,6 @@ double CrossSection2::dSigma_integrated(double minpt1, double minpt2, double min
             else y2intres += intresult;
         }
         //y2intres *= (maxy-miny)/6.0;
-        y2intres *= (maxy-miny)/12.0;
         /*if (y1ind==1) result += 4.0*y2intres;
         else result += y2intres;
         */

@@ -39,7 +39,6 @@ struct Inthelper_correction
 };
 
 double Inthelperf_correction(double* vec, size_t dim, void* p);
-double Inthelperf_correction2(double* vec, size_t dim, void* p);
 void pVegas_wrapper(double x[6], double f[1], void* par);
 double NormalizeAngle(double phi);
 
@@ -269,163 +268,7 @@ double CrossSection2::CorrectionTerm(double pt1, double pt2, double ya, double p
 
 
 
-
 double Inthelperf_correction(double* vec, size_t dim, void* p)
-{
-    
-    Inthelper_correction* par = (Inthelper_correction*)p;
-    // vec[0]= ln u1, vec[1]=ln u2, vec[2]= ln r
-    // vec[3]=theta_u1, vec[4]=theta_u2
-    // vec[5]=theta_r
-    // angles are within range [0, 2\pi]
-    double u1 = std::exp(vec[0]); double u2=std::exp(vec[1]); double r=std::exp(vec[2]);
-    //double u1=vec[0]; double u2=vec[1]; double r=vec[2];
-    double theta1=vec[3];
-    double theta2=vec[4]; double thetar = vec[5];
-
-    AmplitudeLib* N = par->N;
-
-    double pt1 = par->pt1;
-    double pt2 = par->pt2;
-    double phi = par->phi;
-    double y = par->ya;
-    double z = par->z;
-
-    // Dot products
-    // pt1=k, pt2=q
-    // choose pt1 along the x axis -> theta(pt1)=0
-    double pt1_dot_u1 = pt1*u1*cos(theta1);
-    double pt1_dot_u2 = pt1*u2*cos(theta2);
-    double pt1_dot_r  = pt1*r*cos(thetar);
-    //double pt2_dot_u1 = pt2*u1*cos(NormalizeAngle(theta1 - phi));
-    //double pt2_dot_u2 = pt2*u2*cos(NormalizeAngle(theta2 - phi));
-    double pt2_dot_r  = pt2*r*cos(thetar - phi);
-    double u1_dot_r   = u1*r*cos(theta1-thetar);
-    double u2_dot_r   = u2*r*cos(theta2-thetar);
-    double u1_dot_u2  = u1*u2*cos(theta2-theta1);
-
-    // Norms
-    // (u1-u2+r)^2
-    double u1u2r_sqr = SQR(u1)+SQR(u2)+SQR(r) + 2.0*u1_dot_r - 2.0*u2_dot_r
-        - 2.0*u1_dot_u2;
-    double u1u2r = std::sqrt(u1u2r_sqr);
-    // (u1+r)^2
-    double u1r_sqr = SQR(u1)+SQR(r) + 2.0*u1_dot_r;
-    double u1r = std::sqrt(u1r_sqr);
-    // (u2-r)^2
-    double u2r_sqr = SQR(u2)+SQR(r) - 2.0*u2_dot_r;
-    double u2r = std::sqrt(u2r_sqr);
-
-    // S(u1-u2+r)
-    double s_u1u2r = N->S(u1u2r,y);
-    // S(u1)
-    double s_u1 = N->S(u1,y);
-    // S(u2)
-    double s_u2 = N->S(u2,y);
-    // S(r)
-    double s_r = N->S(r,y);
-
-
-    double result = 0;
-
-    // 4/6-point function
-    if (cyrille)
-        result = s_u1u2r*s_u1*s_u2; // lowest contribution
-
-    // Correction beyond Marquet's paper
-    if (correction)
-    {
-        //double minsprod = 1e-30;  /// result should not depend on this!
-        double nom1 = N->S(u2r, y)*N->S(u1r, y);
-        double denom1 = s_r * s_u1u2r; //N->S(r,y)*N->S(u1u2r,y);
-
-        double nom2 = s_u1*s_u2; //N->S(u1, y)*N->S(u2, y);
-        double denom2 = denom1; // optimize, same as before, N->S(r,y)*N->S(u1u2r,y);
-        double f1f2=0;
-        /*if (nom2 <= 0 or denom2 <= 0 or
-            std::abs(nom2/denom2-1.0) < minsprod or nom1 <= 0)
-                f1f2 = 0;
-        else
-            f1f2 = std::log(nom1/denom1) / std::log(nom2/denom2);
-            */
-        f1f2 = std::log(nom1/denom1) / std::log(nom2/denom2);
-        if (!isnan(f1f2) and !isinf(f1f2))        
-            result -= f1f2*s_u1u2r*(s_u1*s_u2 - s_r*s_u1u2r);
-    }
-    
-    if (cyrille)
-    {
-        // 3-point functions
-        // -S(u)S(u+r-zu') - S(u')S(u'-r-zu)
-        result += -s_u1*N->S(
-            sqrt( SQR(u1) + SQR(r) + SQR(z*u2) + 2.0*u1_dot_r - 2.0*z*u1_dot_u2
-                - 2.0*z*u2_dot_r) , y)
-            - s_u2*N->S(
-            sqrt( SQR(u2) + SQR(r) + SQR(z*u1) - 2.0*u2_dot_r + 2.0*z*u1_dot_r
-                - 2.0*z*u1_dot_u2) , y);
-
-        // 2-point function
-        // +S(r+zu-zu')
-        result += N->S( std::sqrt( SQR(r) + SQR(z)*(SQR(u1)+SQR(u2)-2.0*u1_dot_u2)
-            + 2.0*z*(u1_dot_r - u2_dot_r)) , y);
-    }
-  
-    
-    // Wave function product
-    // \phi^*(u2) \phi(u) summed over spins and polarization
-    // simple resul in massless z=0 case
-    //result *= 16.0*SQR(M_PI) * u1_dot_u2 / ( SQR(u1)*SQR(u2) );
-    // with masses and z!=0 a bit more complicated:
-    // 8pi^2 m^2 z^2 [ K_1(mzu) K_1(mzu') u.u'/(uu') [1+(1-z)^2]
-    //                + z^2 K_0(mzu)K_0(mzu') ]
-    // In order to optimize, factor 8*pi^2*m^2*z^2
-    // is outside the integral
-    // factor 1/k^+ is thrown away as it cancels eventually
-    double M_Q = par->xs->M_Q();
-    double bessel_u1[2];
-    double bessel_u2[2];
-    gsl_sf_bessel_Kn_array(0,1,par->z*M_Q*u1, bessel_u1);
-    gsl_sf_bessel_Kn_array(0,1,par->z*M_Q*u2, bessel_u2);
-    result *= (1.0+SQR(1.0-par->z))*u1_dot_u2 /(u1*u2)
-                * bessel_u1[1] // gsl_sf_bessel_K1(par->z*M_Q*u1)
-                * bessel_u2[1] //gsl_sf_bessel_K1(par->z*M_Q*u2)
-              + SQR(par->z)* bessel_u1[0]//gsl_sf_bessel_K0(par->z*M_Q*u1)
-                * bessel_u2[0]; //gsl_sf_bessel_K0(par->z*M_Q*u2)  ;
-
-    // Contribution from e^(ik(u'-u)) e^(-i \Delta r),
-    // k = pt1, \delta = pt1+pt2
-    // Take only real part
-    result *= cos( pt1_dot_u1 - pt1_dot_u2 + pt2_dot_r + pt1_dot_r );
-
-    result *= u1*u2*r;   // d^2 u_1 d^2 u2 d^2 r = du_1 du_2 dr u_1 u_2 u_3 d\theta_i
-    
-    //double max=500;
-    //if ((u1>max or u2>max or r>max) and std::abs(result)>1e-20)
-    //    cout << u1 << " " << u2 << " " << r << " " << result << endl;
-       
-    result *= u1*u2*r;  // multiply by e^(ln u1) e^(ln u2) e^(ln r) due to the
-                        // change of variables (Jacobian)
-
-    //cout << vec[0] << " " << vec[1] << " " << vec[2] << " " << result << endl;
-
-
-
-    return result;
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-double Inthelperf_correction2(double* vec, size_t dim, void* p)
 {
     
     Inthelper_correction* par = (Inthelper_correction*)p;
@@ -487,93 +330,7 @@ double Inthelperf_correction2(double* vec, size_t dim, void* p)
             ) * s_r;
     }
 
-   /*
-    if (correction)
-    {
-        double cor=0;
-
-        // |r - z(u-u')|
-        double r_m_z_u1u2 = std::sqrt( SQR(r) + SQR(z)*(SQR(u1)+SQR(u2)-2.0*u1_dot_u2)
-            - 2.0*z*(u1_dot_r - u2_dot_r) );
-        double s_r_m_zu1u2 = N->S(r_m_z_u1u2, y);
-
-        // |r + (1-z)(u-u')|
-        double r_p_1mz_u1u2 = std::sqrt( SQR(r) + SQR(1.0-z)*(SQR(u1)+SQR(u2)-2.0*u1_dot_u2)
-            + 2.0*(1.0-z)*(u1_dot_r - u2_dot_r));
-        double s_r_p_1mz_u1u2 = N->S(r_p_1mz_u1u2, y);
-
-        // |r - (1-z)u2 - zu1|
-        double r_m_1mz_u2_m_zu1 = std::sqrt( SQR(r) + SQR(z)*SQR(u1) + SQR(1.0-z)*SQR(u2)
-            - 2.0*(1.0-z)*u2_dot_r - 2.0*z*u1_dot_r + 2.0*z*(1.0-z)*u1_dot_u2 );
-        double s_r_m_1mz_u2_m_zu1 = N->S(r_m_1mz_u2_m_zu1, y);
-
-        // |r + (1-z)u + zu'|
-        double r_p_1mz_u_p_zu2 = std::sqrt( SQR(r) + SQR(1.0-z)*SQR(u1)+SQR(z)*SQR(u2)
-            + 2.0*(1.0-z)*u1_dot_r + 2.0*z*u2_dot_r + 2.0*z*(1.0-z)*u1_dot_u2 );
-        double s_r_p_1mz_u_p_zu2 = N->S(r_p_1mz_u_p_zu2, y);
-
-        double f1 = s_r_m_1mz_u2_m_zu1 * s_r_p_1mz_u_p_zu2 / ( s_r_m_zu1u2 * s_r_p_1mz_u1u2);
-
-        double f2 = s_u1*s_u2 / ( s_r_m_zu1u2 * s_r_p_1mz_u1u2);
-
-        
-        //if (std::abs(f2-1.0) < 1e-30 or f1<1e-30)    // u=u'=r
-        //{
-        //    cor=0;
-        //}
-        //else
-        //{
-
-            cor = std::log(f1)/std::log(f2) * s_r_p_1mz_u1u2
-                *( s_u1*s_u2 - s_r_m_zu1u2 * s_r_p_1mz_u1u2 );
-
-            if (isnan(cor) or isinf(cor))
-            {
-                //cerr << "naninf " << "??, u1: " << u1 << " u2 " << u2 << " r " << r << " f1 " << f1
-                //<< " f2 " << f2 << "r_m_1mz_u2_m_zu1" << r_m_1mz_u2_m_zu1 << " s " << s_r_m_1mz_u2_m_zu1 << endl;
-                cor = 0;
-            }
-            else
-            {
-                cor *= std::cos(-pt1_dot_r - pt2_dot_r + (1.0-z)*(pt1_dot_u2 - pt1_dot_u1)
-                        - z*(pt2_dot_u2 - pt2_dot_u1) );
-            }
-
-            result -=cor;
-        //}
-        
-    }
-        */
-
-    /*
-    if (correction)
-    {
-        // r + u
-        double r_p_u1 = std::sqrt(SQR(r) + SQR(u1) + 2.0*u1_dot_r);
-        // r - u2
-        double r_m_u2 = std::sqrt(SQR(r)+SQR(u2) - 2.0*u2_dot_r);
-        // r+u-u2
-        double r_p_u1_m_u2 = std::sqrt(SQR(r) + (SQR(u1)+SQR(u2)-2.0*u1_dot_u2)
-                            + 2.0*(u1_dot_r - u2_dot_r) );
-        double s_r_p_u1_m_u2 = N->S(r_p_u1_m_u2, y);
-
-        double f1 = N->S(r_m_u2,y)*N->S(r_p_u1, y)/(s_r*s_r_p_u1_m_u2);
-        double f2 = s_u1*s_u2/(s_r*s_r_p_u1_m_u2);
-
-        double loglog = std::log(f1)/std::log(f2);
-        /*if (std::abs(f1-f2)<1e-40 and s_r_p_u1_m_u2>0)
-        {
-            //cerr << "1?? u1 " << u1 << " u2 " << u2 << " r " << r << " f1 " << f1 <<"\n";
-            loglog=1;
-        }
-        else*//* if (isinf(loglog) or isnan(loglog))
-            loglog=0;
-        
-        result -= s_r_p_u1_m_u2 * loglog * (s_u1*s_u2 - s_r*s_r_p_u1_m_u2)
-            * std::cos( -pt1_dot_r - pt2_dot_r + pt1_dot_u2 - pt1_dot_u1 );
-     
-    }*/
-    
+   
     double s_r_m_u1_p_u2=0;
     
     if (correction)
@@ -660,7 +417,7 @@ double Inthelperf_correction2(double* vec, size_t dim, void* p)
 	 * Remove infinite DPS contribution
 	 */
 
-	if (correction and u1>0 and false)
+	if (correction and u1>1.0/LAMBDAQCD and false)
 	{
 		double wf=0;
 		if (M_Q > 1e-4)
@@ -704,7 +461,7 @@ double Inthelperf_correction2(double* vec, size_t dim, void* p)
 
 void pVegas_wrapper(double x[6], double f[1], void* par)
 {
-    f[0] = Inthelperf_correction2(x, 6, par);
+    f[0] = Inthelperf_correction(x, 6, par);
 }
 
 
@@ -728,7 +485,7 @@ double Inthelperf_thetar(double thetar, void* p)
     double vec[6] = {par->u1, par->u2, par->r, par->theta1, par->theta2,
         thetar };
     
-    return Inthelperf_correction2(vec, 6, par);
+    return Inthelperf_correction(vec, 6, par);
 }
 
 double Inthelperf_theta2(double theta2, void* p)

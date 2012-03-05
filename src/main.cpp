@@ -203,14 +203,18 @@ int main(int argc, char* argv[])
     #ifdef USE_MPI
     }
     #endif
-
+	if (ya<0)
+	{
+		cerr << "Negative rapidity " << ya << endl;
+		return -1;
+	}
     amplitude.InitializeInterpolation(ya);
     double normalization = 1;//cross_section.Sigma(pt1, pt2, y1, y2, sqrts);
     //cout << "# Normalization totxs " << normalization << endl;
     //cout << "# Theta=2.5 " << cross_section.dSigma(pt1,pt2,y1,y2,2.5,sqrts) << endl;
-    int points=7;
+    int points=10;
     if (phi>-0.5) points=1;    // calculate only given angle
-    double minphi = 0;
+    double minphi = 0.5;
     //double maxphi=2.0*M_PI-minphi;
     double maxphi=M_PI;
     
@@ -219,8 +223,8 @@ int main(int argc, char* argv[])
     for (double pt=1e-4; pt<400; pt*=1.1)
     {
         amplitude.InitializeInterpolation(y1);
-        cout << pt << " " << amplitude.S_k(pt, y1) << endl;
-        //cout << pt << " " << cross_section.G(pt, 0.02*std::exp(-y1), 0.5) << endl;
+        //cout << pt << " " << 1.0 - amplitude.S_k(pt, y1) << endl;
+        cout << pt << " " << 1.0 - cross_section.G(pt, 0.02*std::exp(-y1), 0.5) << endl;
     }
     return 0;
     */
@@ -272,7 +276,7 @@ int main(int argc, char* argv[])
         //cross_section.Prepare2DInterpolators(theta);
         
         if (!fftw)
-         //   result = cross_section.dSigma_integrated(2, 1, 2.4, 4, theta, sqrts, deuteron);
+            //result = cross_section.dSigma_integrated(2, 1, 2.4, 4, theta, sqrts, deuteron);
 
             //result = cross_section.dSigma_full(pt1,pt2,y1,y2,theta,sqrts, deuteron);
             result = cross_section.dSigma(pt1,pt2,y1,y2,theta,sqrts,multiply_pdf);
