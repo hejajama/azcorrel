@@ -23,13 +23,20 @@
 
 using std::cout; using std::endl;
 
+enum MODE
+{
+	MODE_CP,
+	MODE_FIXED_PT_Y,
+	MODE_DSIGMA
+};
 
 void PlotPdf(double Q);
 
 int main(int argc, char* argv[])
 {
-        if (string(argv[1])=="-help")
+    if (string(argv[1])=="-help")
     {
+		cout << "-mode [CP,FIXED,DSIGMA]" << endl;
         cout << "-y1 y: set rapidity of particle 1" << endl;
         cout << "-y2 2: set rapidity of particle 2" << endl;
         cout << "-pt1 pt: rapidity of particle 1" << endl;
@@ -44,8 +51,12 @@ int main(int argc, char* argv[])
         cout << "-mq quark_mass in GeV" << endl;
         cout << "-deuteron: use deuteron as a probe" << endl;
         cout << "-output_file filename" << endl;
+        cout << "-points points" << endl;
         return 0;
     }
+
+	MODE mode = MODE_DSIGMA;
+	int points=10;
 
     #ifdef USE_MPI
     int rc = MPI_Init(&argc, &argv);
@@ -105,6 +116,21 @@ int main(int argc, char* argv[])
             multiply_pdf=false;
         else if (string(argv[i])=="-mq")
             mq = StrToReal(argv[i+1]);
+        else if (string(argv[i])=="-mode")
+		{
+			if (string(argv[i+1])=="CP")
+				mode=MODE_CP;
+			else if (string(argv[i+1])=="DSIGMA")
+				mode = MODE_DSIGMA;
+			else if (string(argv[i+1])=="FIXED")
+				mode = MODE_FIXED_PT_Y;
+			else
+			{
+				cerr << "Unknown mode " << argv[i+1] << endl;
+				return -1;
+			}
+			
+		}
         else if (string(argv[i])=="-pdfmode")
         {
             if (string(argv[i+1])=="MRST")
@@ -129,6 +155,8 @@ int main(int argc, char* argv[])
             tmpstr >> mcintpoints;
             
         }
+        else if (string(argv[i])=="-points")
+			points = StrToInt(argv[i+1]);
         else if (string(argv[i])=="-deuteron")
             deuteron=true;
         else if (string(argv[i])=="-output_file")
@@ -158,6 +186,8 @@ int main(int argc, char* argv[])
         delete pdf;
         return 0;
     }
+    
+
     AmplitudeLib amplitude(amplitude_filename);
     KKP fragmentation;
 
@@ -212,7 +242,6 @@ int main(int argc, char* argv[])
     double normalization = 1;//cross_section.Sigma(pt1, pt2, y1, y2, sqrts);
     //cout << "# Normalization totxs " << normalization << endl;
     //cout << "# Theta=2.5 " << cross_section.dSigma(pt1,pt2,y1,y2,2.5,sqrts) << endl;
-    int points=10;
     if (phi>-0.5) points=1;    // calculate only given angle
     double minphi = 0.5;
     //double maxphi=2.0*M_PI-minphi;
@@ -224,18 +253,11 @@ int main(int argc, char* argv[])
     {
         amplitude.InitializeInterpolation(y1);
         //cout << pt << " " << 1.0 - amplitude.S_k(pt, y1) << endl;
-        cout << pt << " " << 1.0 - cross_section.G(pt, 0.02*std::exp(-y1), 0.5) << endl;
+        cout << pt << " " << 1.0 - pt*cross_section.G(pt, 0.02*std::exp(-y1), 0.5) << endl;
     }
-    return 0;
-    */
-    /*cross_section.LoadPtData(2.4,2.4);
-    cross_section.Prepare2DInterpolators(0.5);
-    for (double pt =1; pt < 6; pt += 0.1)
-    {
-        cout << pt << " " << cross_section.Ptinterpolator2d()->Evaluate(1, pt) << endl;
-    }
-    return 0;
-    */      
+    return 0;*/
+    
+ 
 
     // FFTW
     if (fftw)
@@ -244,16 +266,9 @@ int main(int argc, char* argv[])
     if (fftw and multiply_pdf)
         cerr <<"Can't calculate FFT and multiply by PDF!" << endl;
 
-    //cross_section.LoadPtData(y1,y2);
+	if (mode == MODE_FIXED_PT_Y)
+		cross_section.LoadPtData(y1,y2);
     int ready=0;
-    /*
-    
-    cross_section.Prepare2DInterpolators(2);
-    cout << "(2,2): " << cross_section.dSigma(2, 2, y1, y2, 2, 200, false)
-        << " interp. (2,2.25): " << cross_section.Ptinterpolator2d()->Evaluate(2, 2.25)
-        << " (2,2.5): " << cross_section.dSigma(2, 2.5, y1, y2, 2, 200, false) << endl;
-    return 0;*/
-
     
     #pragma omp parallel for
     for (int i=0; i<points; i++)
@@ -273,22 +288,19 @@ int main(int argc, char* argv[])
             
         }
 
-        //cross_section.Prepare2DInterpolators(theta);
-        
-        if (!fftw)
-            //result = cross_section.dSigma_integrated(2, 1, 2.4, 4, theta, sqrts, deuteron);
+		if (mode == MODE_FIXED_PT_Y)
+		{	
+			cross_section.Prepare2DInterpolators(theta);
+			result = cross_section.dSigma_full(pt1,pt2,y1,y2,theta,sqrts, deuteron);
+		}
+		if (mode == MODE_CP)
+			result = cross_section.dSigma_integrated(2, 1, 2.4, 4, theta, sqrts, deuteron);
+		
+		if (mode==MODE_DSIGMA)
+		{
+			result = cross_section.dSigma(pt1,pt2,y1,y2,theta,sqrts,multiply_pdf);
+		}
 
-            //result = cross_section.dSigma_full(pt1,pt2,y1,y2,theta,sqrts, deuteron);
-            result = cross_section.dSigma(pt1,pt2,y1,y2,theta,sqrts,multiply_pdf);
-            //    + cross_section.dSigma(pt2,pt1,y2,y1,theta,sqrts,multiply_pdf);
-        else
-            result = cross_section.CorrectionTerm_fft(pt1, pt2, ya, theta);
-        /*if (result<-0.5)
-        {
-            //cout <<"# " << theta <<" MC integral failed " << endl;
-            continue;
-        }*/
-        
         #pragma omp critical
         {
             #ifdef USE_MPI
