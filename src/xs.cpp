@@ -79,8 +79,9 @@ double CrossSection2::dSigma(double pt1, double pt2, double y1, double y2, doubl
     double ya = std::log(N->X0()/tmpxa);
     if (ya<0)
         cerr << "Negative rapidity interval at " << LINEINFO << endl;
+    //ya=0;   /////TODO!!!!!!!!!!! DEBUG!!!!!!!
     if (!N->InterpolatorInitialized(ya))
-		N->InitializeInterpolation(ya);
+        N->InitializeInterpolation(ya);
     double delta = Delta(pt1,pt2,phi);
 
     double g=0,f=0,h=0;
@@ -103,6 +104,10 @@ double CrossSection2::dSigma(double pt1, double pt2, double y1, double y2, doubl
     }
     */
     f=N->S_k(delta, ya)/SQR(2.0*M_PI);
+    if (f<0)
+    {
+        cerr << "f=" << f << " at phi=" << phi << endl;
+    }
     g = G(pt2, tmpxa, tmpz); h=H(pt2, tmpxa, tmpz);
 
     // \kappa^2 = (k - z\delta)^2 = (1-z)^2 pt1^2 + z^2 pt2^2 - 2*z*(1-z)*pt1*pt2*cos \phi
@@ -147,7 +152,7 @@ double CrossSection2::dSigma(double pt1, double pt2, double y1, double y2, doubl
     
     double correction = CorrectionTerm(pt1,pt2,ya,phi,tmpz);
     //if (std::abs(correction+1.0)<0.001) return -1;
-   	//result +=correction;
+    //result +=correction;
     result = correction;
     
     /*result = CorrectionTerm_fft(pt1, pt2, ya, phi);
@@ -198,8 +203,8 @@ struct Inthelper_sigma
 double Inthelperf_sigma(double theta, void* p)
 {
     Inthelper_sigma *par = (Inthelper_sigma*) p;
-    double res1 = par->xs->dSigma(par->pt1, par->pt2, par->y1, par->y2, theta, par->sqrts);
-    double res2 = par->xs->dSigma(par->pt2, par->pt1, par->y2, par->y1, theta, par->sqrts);
+    double res1 = par->xs->dSigma(par->pt1, par->pt2, par->y1, par->y2, theta, par->sqrts, false);
+    double res2 = par->xs->dSigma(par->pt2, par->pt1, par->y2, par->y1, theta, par->sqrts, false);
 
     if (isnan(res1) or isnan(res2) or isinf(res1) or isinf(res2))
     {
@@ -384,7 +389,7 @@ double CrossSection2::dSigma_full(double pt1, double pt2, double y1, double y2,
         << " relerror " << std::abs(abserr/result) << " dphi " << phi << endl;
     */
 
-    result *= ALPHAS * Cf / (4.0*SQR(M_PI)); // NB! \int d^2b = S_T is dropped as it
+    result *= Alpha_s(SQR(std::max(pt1, pt2))) * Cf / (4.0*SQR(M_PI)); // NB! \int d^2b = S_T is dropped as it
     // should cancel, wouldn't work anymore if we calculated something b-dependent!!!!
 
     return result;
@@ -414,7 +419,7 @@ double dSigma_full_helperf_z1(double z1, void* p)
         cerr << "z2int failed at " << LINEINFO <<", result " << result
         << " relerror " << std::abs(abserr/result) << " dphi " << par->phi << endl;
         */
-    return result;
+    return result/SQR(z1);
 }
 
 double dSigma_full_helperf_z2(double z2, void* p)
@@ -526,7 +531,7 @@ double dSigma_full_helperf_z2(double z2, void* p)
         cerr << "HUGE DIFFERENCE " << std::abs(result-result2)/result << " k: " << par->pt1/par->z1 << " q " << par->pt2/z2 << endl;
     //cout << par->z1 << " " << z2 << " " << result/SQR(par->z1*z2) << endl;
 */
-    return result/SQR(par->z1*z2);
+    return result/SQR(z2);
 }
 
 /*
@@ -983,7 +988,8 @@ int CrossSection2::LoadPtData(double y1, double y2)
     ptinterpolators_rev_correction.clear();
 
     //std::string fileprefix = "rhic_pp/";
-    string fileprefix = "rhic_central_025/";
+    //string fileprefix = "rhic_central_025/";
+    string fileprefix = "rhic_025/";
     string fileprefix_cor = "rhic_korjaus_central/";
 
    int points=ptvals.size();

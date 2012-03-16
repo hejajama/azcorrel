@@ -20,7 +20,7 @@ class CrossSection2
         CrossSection2(AmplitudeLib* N_, PDF* pdf_, FragmentationFunction* frag);
         ~CrossSection2();
         double dSigma_lo(double pt1, double pt2, double y1, double y2, double theta, double sqrts
-            , bool multiply_pdf=true);
+            , bool multiply_pdf=false);
         double dSigma(double pt1, double pt2, double y1, double y2, double theta, double sqrts,
             bool pdf=true);
         double CorrectionTerm(double pt1, double pt2, double ya, double phi, double z);

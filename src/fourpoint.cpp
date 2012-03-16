@@ -44,6 +44,9 @@ double NormalizeAngle(double phi);
 
 bool cyrille=false; 
 bool correction=true;
+bool finite_nc=false;   // true: use finite-Nc-gaussian 4-point
+
+const double UV_CUTOFF = 1.0/LAMBDAQCD;
 
 /*
  * Calculates the correction term/full integral over 6-dim. hypercube
@@ -59,7 +62,9 @@ double CrossSection2::CorrectionTerm(double pt1, double pt2, double ya, double p
     MPI_Comm_rank(MPI_COMM_WORLD, &id);
     if(id==0) 
     #endif
-    cout << "# Starting MC integral, marquet: " << cyrille << ", correction: " << correction << endl;
+    
+    cout << "# Starting MC integral, marquet: " << cyrille << ", correction: " << correction 
+        << " finite-Nc " << finite_nc << " uv-cutoff " << UV_CUTOFF << endl;
 
 
     if (!N->InterpolatorInitialized(ya))
@@ -94,9 +99,9 @@ double CrossSection2::CorrectionTerm(double pt1, double pt2, double ya, double p
             helper.xs=this;
              
         #ifndef USE_MPI
-			double (*integrand)(double*,size_t,void*) = Inthelperf_correction2;
-			const gsl_rng_type *T = gsl_rng_default;
-			//gsl_rng_env_setup();
+            double (*integrand)(double*,size_t,void*) = Inthelperf_correction2;
+            const gsl_rng_type *T = gsl_rng_default;
+            //gsl_rng_env_setup();
             gsl_monte_function G = {integrand, 6, &helper};
             
             double result,abserr;
@@ -158,7 +163,7 @@ double CrossSection2::CorrectionTerm(double pt1, double pt2, double ya, double p
                     << " relerror " << std::abs(abserr*constants/result) << endl;
                 cout <<"# " << phi << " MC integral with " << mcintpoints << " points and " << i << " iterations took " << (std::time(NULL)-start)/60.0/60.0 <<" hours " << endl;
             }
-       #endif	// USE_MPI
+       #endif   // USE_MPI
 
 
 
@@ -282,9 +287,9 @@ double Inthelperf_correction(double* vec, size_t dim, void* p)
     double theta2=vec[4]; double thetar = vec[5];
     
     if (isnan(u1) or isnan(u2))
-	{
-		cerr << "u1/u2 nan, WTF???" << endl;
-	}
+    {
+        cerr << "u1/u2 nan, WTF???" << endl;
+    }
 
     AmplitudeLib* N = par->N;
 
@@ -317,10 +322,12 @@ double Inthelperf_correction(double* vec, size_t dim, void* p)
     double result = 0;
 
 
-    if (cyrille)
+    if (cyrille and !finite_nc)
     {
-        result = (std::cos(-pt1_dot_r - pt2_dot_r - pt2_dot_u2 + pt2_dot_u1)
-            * s_u1*s_u2
+        result = std::cos(-pt1_dot_r - pt2_dot_r - pt2_dot_u2 + pt2_dot_u1)
+                * s_u1*s_u2*s_r; 
+        
+        result += (
             - std::cos(-pt1_dot_r - pt2_dot_r + pt2_dot_u1 + (1.0-z)*pt1_dot_u2-z*pt2_dot_u2)
              * s_u1
             - std::cos(-pt1_dot_r - pt2_dot_r - pt2_dot_u2 - (1.0-z)*pt1_dot_u1 + z*pt2_dot_u1)
@@ -329,53 +336,93 @@ double Inthelperf_correction(double* vec, size_t dim, void* p)
                 - z*(pt2_dot_u2 - pt2_dot_u1) )
             ) * s_r;
     }
+    
+    double r_m_u1=0, s_r_m_u1=0, r_p_u2=0, s_r_p_u2=0, r_m_u1_p_u2=0, s_r_m_u1_p_u2=0;
+    if (finite_nc or correction)
+    {      
+        r_m_u1 = std::sqrt(SQR(r) + SQR(u1) - 2.0*u1_dot_r);
+        s_r_m_u1 = N->S(r_m_u1, y);
+        // r + u'
+        r_p_u2 = std::sqrt(SQR(r) + SQR(u2) + 2.0*u2_dot_r);
+        s_r_p_u2 = N->S(r_p_u2, y);
+        // r - u + u' = r + (u'-u)
+        r_m_u1_p_u2 = std::sqrt( SQR(r) + (SQR(u1) + SQR(u2) - 2.0*u1_dot_u2)
+                    + 2.0*(u2_dot_r - u1_dot_r) );
+        s_r_m_u1_p_u2 = N->S(r_m_u1_p_u2, y);
+        
+    }
+    
+    // 3- and 2-point functions, finite-Nc accuracy
+    if (cyrille and finite_nc)
+    {
+        result = (-std::cos(-pt1_dot_r - pt2_dot_r + pt2_dot_u1 + (1.0-z)*pt1_dot_u2-z*pt2_dot_u2)
+                * std::pow(s_u1, Nc/(2.0*Cf))*std::pow(s_r_m_u1, -1.0/(2.0*Nc*Cf)) 
+            - std::cos(-pt1_dot_r - pt2_dot_r - pt2_dot_u2 - (1.0-z)*pt1_dot_u1 + z*pt2_dot_u1)
+                * std::pow(s_u2, Nc/(2.0*Cf))*std::pow(s_r_p_u2,-1.0/(2.0*Nc*Cf))
+            )*std::pow(s_r, Nc/(2.0*Cf))
+            +  std::cos(-pt1_dot_r - pt2_dot_r + (1.0-z)*(pt1_dot_u2 - pt1_dot_u1)
+                - z*(pt2_dot_u2 - pt2_dot_u1) ) * s_r;
+        
+    }
 
-   
-    double s_r_m_u1_p_u2=0;
     
     if (correction)
     {
-        // r - u
-        double r_m_u1 = std::sqrt(SQR(r) + SQR(u1) - 2.0*u1_dot_r);
-        double s_r_m_u1 = N->S(r_m_u1, y);
-        // r + u'
-        double r_p_u2 = std::sqrt(SQR(r) + SQR(u2) + 2.0*u2_dot_r);
-        double s_r_p_u2 = N->S(r_p_u2, y);
-        // r - u + u' = r + (u'-u)
-        double r_m_u1_p_u2 = std::sqrt( SQR(r) + (SQR(u1) + SQR(u2) - 2.0*u1_dot_u2)
-                    + 2.0*(u2_dot_r - u1_dot_r) );
-        s_r_m_u1_p_u2 = N->S(r_m_u1_p_u2, y);
 
-    
-        double f1 = s_r_m_u1 * s_r_p_u2 / (s_r_m_u1_p_u2 * s_r);
-        double f2 = s_u1 * s_u2 / (s_r_m_u1_p_u2 * s_r);
-        double loglog=0;
-        
-        loglog = std::log(f1) / std::log(f2);
-		// If u1,u2>>r loglog->1
-        if (s_u1==0 and s_u2==0 and s_r>0 )
-			loglog=1;
-		// All other NaN limits vanish
-		
-        if (isnan(loglog) )
-            loglog=0;
-        if (isinf(loglog))
+        if (!finite_nc)
         {
-			/*cout << "inf at u1 " << u1 << " u2 " << u2 << " r " << r << " f1 " << f1 << " f2 " << f2 <<
-			" s " << s_r*(s_u1 * s_u2 - s_r * s_r_m_u1_p_u2) << " dpfd " << s_r* s_r * s_r_m_u1_p_u2 << endl;
-            */
-            loglog=0;
-           }
-        
-
-        /*double nom = std::log(s_r_m_u1) + std::log(s_r_p_u2) - std::log(s_r_m_u1_p_u2) - std::log(s_r);
-        double denom = std::log(s_u1) + std::log(s_u2) - std::log(s_r_m_u1_p_u2) - std::log(s_r);
-        double loglog = nom/denom;
-        if (isinf(loglog) or isnan(loglog)) loglog=0;
-        */
-
-        result -= ( s_r * loglog * (s_u1 * s_u2 - s_r * s_r_m_u1_p_u2)  )
-                * cos( -pt1_dot_r - pt2_dot_r - pt2_dot_u2 + pt2_dot_u1 );
+            double f1 = s_r_m_u1 * s_r_p_u2 / (s_r_m_u1_p_u2 * s_r);
+            double f2 = s_u1 * s_u2 / (s_r_m_u1_p_u2 * s_r);
+            double loglog=0;     
+            loglog = std::log(f1) / std::log(f2);
+            // If u1,u2>>r loglog->1
+            if (s_u1==0 and s_u2==0 and s_r>0 )
+                loglog=1;
+            // All other NaN limits vanish
+            
+            if (isnan(loglog) )
+                loglog=0;
+            if (isinf(loglog))
+            {
+                /*cout << "inf at u1 " << u1 << " u2 " << u2 << " r " << r << " f1 " << f1 << " f2 " << f2 <<
+                " s " << s_r*(s_u1 * s_u2 - s_r * s_r_m_u1_p_u2) << " dpfd " << s_r* s_r * s_r_m_u1_p_u2 << endl;
+                */
+                loglog=0;
+            }
+            
+            result -= ( s_r * loglog * (s_u1 * s_u2 - s_r * s_r_m_u1_p_u2)  )
+                    * cos( -pt1_dot_r - pt2_dot_r - pt2_dot_u2 + pt2_dot_u1 );
+        }
+        // Finite Nc
+        else
+        {
+                cerr << "FInite-Nc doesn't work!" << endl;
+            // F(b,x',x,b')
+            double f_b1x2 = 1.0/Cf * std::log( s_u1*s_u2 / (s_r_m_u1_p_u2 * s_r) );
+            // F(b,x,x',b')
+            double f_b1x1 = 1.0/Cf * std::log( s_r_m_u1 * s_r_p_u2 / (s_r_m_u1_p_u2*s_r) );
+            // F(b,b',x',x)
+            double f_b1b2 = 1.0/Cf * std::log( s_r_m_u1 * s_r_p_u2 / (s_u1*s_u2) );
+            
+            // \Delta = F^2(b,x',x,b') + 4/Nc^2 F(b,x,x',b')F(b,b',x',x)
+            double delt = SQR(f_b1x2) + 4.0/SQR(Nc)*f_b1x1 * f_b1b2;
+            double delt_sqrt = std::sqrt(delt);
+            
+            double fourp = s_r * s_u1*s_u2 *( 
+                ( (delt_sqrt + f_b1x2)/(2.0*delt_sqrt) - f_b1x1/delt_sqrt) * std::exp(Nc/4.0*delt_sqrt)
+                +( (delt_sqrt - f_b1x2)/(2.0*delt_sqrt) + f_b1x1/delt_sqrt) * std::exp(-Nc/4.0*delt_sqrt)
+                )
+                * std::exp( -Nc/4.0*f_b1x2 + 1.0/(2.0*Nc)*f_b1x1) 
+                * std::cos( -pt1_dot_r - pt2_dot_r - pt2_dot_u2 + pt2_dot_u1 );
+            
+            ///TODO: NAN
+            if (isnan(fourp)) fourp=0;
+            if (isinf(fourp)){ cerr << "infresult!\n"; exit(1);}
+            
+            result += fourp;
+            
+            
+        }
 
     }
     
@@ -390,10 +437,9 @@ double Inthelperf_correction(double* vec, size_t dim, void* p)
     // is outside the integral
     // factor 1/k^+ is thrown away as it cancels eventually
     double M_Q = par->xs->M_Q();
-    double bessel_u1[2];
+    double bessel_u1[2]; double bessel_u2[2];
     if (M_Q > 1e-4)
     {
-        double bessel_u2[2];
         gsl_sf_bessel_Kn_array(0,1,par->z*M_Q*u1, bessel_u1);
         gsl_sf_bessel_Kn_array(0,1,par->z*M_Q*u2, bessel_u2);
         double wf =  (1.0+SQR(1.0-par->z))*u1_dot_u2 /(u1*u2)
@@ -401,39 +447,61 @@ double Inthelperf_correction(double* vec, size_t dim, void* p)
                     * bessel_u2[1] //gsl_sf_bessel_K1(par->z*M_Q*u2)
                   + SQR(par->z)* bessel_u1[0]//gsl_sf_bessel_K0(par->z*M_Q*u1)
                     * bessel_u2[0]; //gsl_sf_bessel_K0(par->z*M_Q*u2)  ;
+        
+        
         result *= wf;
         if (isnan(result)){
-			cout <<"nan, u1bessel: " << par->z*M_Q*u1 << " u2 " << par->z*M_Q*u2 << " u1 " 
-			<< u1 << " u2 " << u2 << " z " << par->z << " m " << M_Q 
-			<< " r " << r << " theta1 " << theta1 << endl;
-			//exit(1);
-		}
+            cout <<"nan, u1bessel: " << par->z*M_Q*u1 << " u2 " << par->z*M_Q*u2 << " u1 " 
+            << u1 << " u2 " << u2 << " z " << par->z << " m " << M_Q 
+            << " r " << r << " theta1 " << theta1 << endl;
+            //exit(1);
+        }
     }
     else
-        result *= u1_dot_u2 / (SQR(u1)*SQR(u2)) * (1.0+SQR(1.0-par->z));    // 8\pi^2 is outside the integral
+    {
+        double wf = u1_dot_u2 / (SQR(u1)*SQR(u2)) * (1.0+SQR(1.0-par->z));    // 8\pi^2 is outside the integral
+        result *= wf;
+    }
 
+    /* 
+     * Remove infinite DPS contribution
+     */
 
-	/* 
-	 * Remove infinite DPS contribution
-	 */
-
-	if (correction and u1>1.0/LAMBDAQCD and false)
-	{
-		double wf=0;
-		if (M_Q > 1e-4)
-		{
-			wf =  (1.0+SQR(1.0-par->z))
-						* bessel_u1[1] // gsl_sf_bessel_K1(par->z*M_Q*u1)
-						* bessel_u1[1] //gsl_sf_bessel_K1(par->z*M_Q*u1)
-					  + SQR(par->z)* bessel_u1[0]//gsl_sf_bessel_K0(par->z*M_Q*u1)
-						* bessel_u1[0]; //gsl_sf_bessel_K0(par->z*M_Q*u2)  ;
-		}
-		else
-			wf = 1.0/SQR(u1) * (1.0+SQR(1.0-par->z));
-		result -= SQR(s_r)*s_r_m_u1_p_u2 * wf 
-			* cos( -pt1_dot_r - pt2_dot_r - pt2_dot_u2 + pt2_dot_u1 );
-		
-	}
+    if (correction)
+    {
+        double wf1=0; double wf2=0;
+        if (u1 > UV_CUTOFF)
+        {
+            if (M_Q > 1e-4)
+            {
+                wf1 =  (1.0+SQR(1.0-par->z))
+                            * bessel_u1[1] // gsl_sf_bessel_K1(par->z*M_Q*u1)
+                            * bessel_u1[1] //gsl_sf_bessel_K1(par->z*M_Q*u1)
+                          + SQR(par->z)* bessel_u1[0]//gsl_sf_bessel_K0(par->z*M_Q*u1)
+                            * bessel_u1[0]; //gsl_sf_bessel_K0(par->z*M_Q*u1)  ;
+            }
+            else
+                wf1 = 1.0/SQR(u1) * (1.0+SQR(1.0-par->z));
+        }
+        if (u2 > UV_CUTOFF)
+        {
+            if (M_Q > 1e-4)
+            {
+                wf2 =  (1.0+SQR(1.0-par->z))
+                            * bessel_u2[1] // gsl_sf_bessel_K1(par->z*M_Q*u2)
+                            * bessel_u2[1] //gsl_sf_bessel_K1(par->z*M_Q*u2)
+                          + SQR(par->z)* bessel_u2[0]//gsl_sf_bessel_K0(par->z*M_Q*u2)
+                            * bessel_u2[0]; //gsl_sf_bessel_K0(par->z*M_Q*u2)  ;
+            }
+            else
+                wf2 = 1.0/SQR(u1) * (1.0+SQR(1.0-par->z));
+        }
+        wf1*=0.5; wf2*=0.5;
+                
+        result -= SQR(s_r)*s_r_m_u1_p_u2 * (wf1+wf2) 
+                * cos( -pt1_dot_r - pt2_dot_r - pt2_dot_u2 + pt2_dot_u1 );
+        
+    }
 
     if (isnan(result)){
         cerr << "NAN!\n"; exit(1); }

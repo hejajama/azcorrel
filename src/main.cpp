@@ -25,9 +25,9 @@ using std::cout; using std::endl;
 
 enum MODE
 {
-	MODE_CP,
-	MODE_FIXED_PT_Y,
-	MODE_DSIGMA
+    MODE_CP,
+    MODE_FIXED_PT_Y,
+    MODE_DSIGMA
 };
 
 void PlotPdf(double Q);
@@ -36,13 +36,14 @@ int main(int argc, char* argv[])
 {
     if (string(argv[1])=="-help")
     {
-		cout << "-mode [CP,FIXED,DSIGMA]" << endl;
+        cout << "-mode [CP,FIXED,DSIGMA]" << endl;
         cout << "-y1 y: set rapidity of particle 1" << endl;
         cout << "-y2 2: set rapidity of particle 2" << endl;
         cout << "-pt1 pt: rapidity of particle 1" << endl;
         cout << "-pt2 pt: rapidit yof particle 2" << endl;
         cout << "-sqrts sqrts: \\sqrts(s)" << endl;
         cout << "-phi phi: calculate only one angle" << endl;
+        cout << "-minphi phi, -maxphi phi" << endl;
         cout << "-pdfmode [MRST, CTEQ]: choose pdf" << endl;
         cout << "-pdf Q: plot PDF as a function of x" << endl;
         cout << "-nopdf: don't multiply by pdf, prints ~d\\sigma/d^3kd^3q" << endl;
@@ -55,8 +56,9 @@ int main(int argc, char* argv[])
         return 0;
     }
 
-	MODE mode = MODE_DSIGMA;
-	int points=10;
+    MODE mode = MODE_DSIGMA;
+    int points=10;
+    double minphi=0.5, maxphi=M_PI;
 
     #ifdef USE_MPI
     int rc = MPI_Init(&argc, &argv);
@@ -108,6 +110,10 @@ int main(int argc, char* argv[])
             sqrts = StrToReal(argv[i+1]);
         else if (string(argv[i])=="-phi")
             phi = StrToReal(argv[i+1]);
+        else if (string(argv[i])=="-minphi")
+            minphi = StrToReal(argv[i+1]);
+        else if (string(argv[i])=="-maxphi")
+            maxphi = StrToReal(argv[i+1]);
         else if (string(argv[i])=="-amplitude")
             amplitude_filename = argv[i+1];
         else if (string(argv[i])=="-pdf")
@@ -117,20 +123,20 @@ int main(int argc, char* argv[])
         else if (string(argv[i])=="-mq")
             mq = StrToReal(argv[i+1]);
         else if (string(argv[i])=="-mode")
-		{
-			if (string(argv[i+1])=="CP")
-				mode=MODE_CP;
-			else if (string(argv[i+1])=="DSIGMA")
-				mode = MODE_DSIGMA;
-			else if (string(argv[i+1])=="FIXED")
-				mode = MODE_FIXED_PT_Y;
-			else
-			{
-				cerr << "Unknown mode " << argv[i+1] << endl;
-				return -1;
-			}
-			
-		}
+        {
+            if (string(argv[i+1])=="CP")
+                mode=MODE_CP;
+            else if (string(argv[i+1])=="DSIGMA")
+                mode = MODE_DSIGMA;
+            else if (string(argv[i+1])=="FIXED")
+                mode = MODE_FIXED_PT_Y;
+            else
+            {
+                cerr << "Unknown mode " << argv[i+1] << endl;
+                return -1;
+            }
+            
+        }
         else if (string(argv[i])=="-pdfmode")
         {
             if (string(argv[i+1])=="MRST")
@@ -156,7 +162,7 @@ int main(int argc, char* argv[])
             
         }
         else if (string(argv[i])=="-points")
-			points = StrToInt(argv[i+1]);
+            points = StrToInt(argv[i+1]);
         else if (string(argv[i])=="-deuteron")
             deuteron=true;
         else if (string(argv[i])=="-output_file")
@@ -173,11 +179,6 @@ int main(int argc, char* argv[])
         pdf = new CTEQ();
         pdf->Initialize();
     }
-    /*if (pt1*std::exp(y1) < pt2*std::exp(y2))
-    {
-        cerr <<"pt1*exp(y1) < pt2*exp(y2) " << endl;
-        return 0;
-    }*/
     
    
     if (Q>=0)   // Plot PDF and exit
@@ -195,7 +196,17 @@ int main(int argc, char* argv[])
     cross_section.SetMCIntPoints(mcintpoints);
     cross_section.SetM_Q(mq);
     double ya=std::log(amplitude.X0() / cross_section.xa(pt1,pt2,y1,y2,sqrts));
-
+    
+    /*
+    amplitude.InitializeInterpolation(y1);
+    for (double pt=1e-4; pt<400; pt*=1.1)
+    {
+        cout << pt << " " << amplitude.S_k(pt, y1) << " " << pt*pt*amplitude.S_k(pt, y1) << endl;
+        //cout << pt << " " << 1.0 - pt*cross_section.G(pt, 0.02*std::exp(-y1), 0.5) << endl;
+    }
+    return 0;
+    */
+    
     std::ofstream output;
     #ifdef USE_MPI
     if (id==0)
@@ -219,8 +230,9 @@ int main(int argc, char* argv[])
     infostr << "# x1=" << pt1*std::exp(y1)/sqrts << ", x2=" << pt2*std::exp(y2)/sqrts
         << " sqrts=" << sqrts << endl;
     infostr << "# z=" << cross_section.z(pt1,pt2,y1,y2) <<", 1-z=" << cross_section.z(pt2,pt1,y2,y1)
-    << " xa=" << cross_section.xa(pt1,pt2,y1,y2,sqrts)
-    << " xh=" << cross_section.xh(pt1,pt2,y1,y2,sqrts) << endl;
+        << " xa=" << cross_section.xa(pt1,pt2,y1,y2,sqrts)
+        << " xh=" << cross_section.xh(pt1,pt2,y1,y2,sqrts)  
+        << " x_0=" << amplitude.X0() << endl;
     infostr << "# Q_s = " << 1.0/amplitude.SaturationScale(ya, 0.22) << " GeV " << endl;
     infostr << "# MC Integration points " << mcintpoints << " / supported: "
         << std::numeric_limits<unsigned long long>::max() << endl;
@@ -233,30 +245,17 @@ int main(int argc, char* argv[])
     #ifdef USE_MPI
     }
     #endif
-	if (ya<0)
-	{
-		cerr << "Negative rapidity " << ya << endl;
-		return -1;
-	}
-    amplitude.InitializeInterpolation(ya);
-    double normalization = 1;//cross_section.Sigma(pt1, pt2, y1, y2, sqrts);
-    //cout << "# Normalization totxs " << normalization << endl;
-    //cout << "# Theta=2.5 " << cross_section.dSigma(pt1,pt2,y1,y2,2.5,sqrts) << endl;
-    if (phi>-0.5) points=1;    // calculate only given angle
-    double minphi = 0.5;
-    //double maxphi=2.0*M_PI-minphi;
-    double maxphi=M_PI;
-    
-    bool fftw=false;
-    /*cout << "# G at y=" << y1 << endl;
-    for (double pt=1e-4; pt<400; pt*=1.1)
+    if (ya<0)
     {
-        amplitude.InitializeInterpolation(y1);
-        //cout << pt << " " << 1.0 - amplitude.S_k(pt, y1) << endl;
-        cout << pt << " " << 1.0 - pt*cross_section.G(pt, 0.02*std::exp(-y1), 0.5) << endl;
-    }
-    return 0;*/
+        cerr << "Negative rapidity " << ya << endl;
+        return -1;
+    }   
+    bool fftw=false;
+
     
+      amplitude.InitializeInterpolation(ya);
+    double normalization = 1;//cross_section.Sigma(pt1, pt2, y1, y2, sqrts);
+    if (phi>-0.5) points=1;    // calculate only given angle
  
 
     // FFTW
@@ -266,8 +265,8 @@ int main(int argc, char* argv[])
     if (fftw and multiply_pdf)
         cerr <<"Can't calculate FFT and multiply by PDF!" << endl;
 
-	if (mode == MODE_FIXED_PT_Y)
-		cross_section.LoadPtData(y1,y2);
+    if (mode == MODE_FIXED_PT_Y)
+        cross_section.LoadPtData(y1,y2);
     int ready=0;
     
     #pragma omp parallel for
@@ -288,18 +287,18 @@ int main(int argc, char* argv[])
             
         }
 
-		if (mode == MODE_FIXED_PT_Y)
-		{	
-			cross_section.Prepare2DInterpolators(theta);
-			result = cross_section.dSigma_full(pt1,pt2,y1,y2,theta,sqrts, deuteron);
-		}
-		if (mode == MODE_CP)
-			result = cross_section.dSigma_integrated(2, 1, 2.4, 4, theta, sqrts, deuteron);
-		
-		if (mode==MODE_DSIGMA)
-		{
-			result = cross_section.dSigma(pt1,pt2,y1,y2,theta,sqrts,multiply_pdf);
-		}
+        if (mode == MODE_FIXED_PT_Y)
+        {   
+            cross_section.Prepare2DInterpolators(theta);
+            result = cross_section.dSigma_full(pt1,pt2,y1,y2,theta,sqrts, deuteron);
+        }
+        if (mode == MODE_CP)
+            result = cross_section.dSigma_integrated(2, 1, 2.4, 4, theta, sqrts, deuteron);
+        
+        if (mode==MODE_DSIGMA)
+        {
+            result = cross_section.dSigma(pt1,pt2,y1,y2,theta,sqrts,multiply_pdf);
+        }
 
         #pragma omp critical
         {
