@@ -151,6 +151,8 @@ double CrossSection2::dSigma(double pt1, double pt2, double y1, double y2, doubl
     // CorrectionTerm returns -1 if the integral doesn't converge
     
     double correction = CorrectionTerm(pt1,pt2,ya,phi,tmpz);
+    // Calculate analytically integral of two-point function
+    correction += f * 2.0/kzdeltasqr * (1.0 + SQR(1.0-tmpz));
     //if (std::abs(correction+1.0)<0.001) return -1;
     //result +=correction;
     result = correction;
@@ -989,7 +991,7 @@ int CrossSection2::LoadPtData(double y1, double y2)
 
     //std::string fileprefix = "rhic_pp/";
     //string fileprefix = "rhic_central_025/";
-    string fileprefix = "rhic_025/";
+    string fileprefix = "rhic_central_025/";
     string fileprefix_cor = "rhic_korjaus_central/";
 
    int points=ptvals.size();

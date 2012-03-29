@@ -256,7 +256,6 @@ int main(int argc, char* argv[])
       amplitude.InitializeInterpolation(ya);
     double normalization = 1;//cross_section.Sigma(pt1, pt2, y1, y2, sqrts);
     if (phi>-0.5) points=1;    // calculate only given angle
- 
 
     // FFTW
     if (fftw)

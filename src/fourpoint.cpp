@@ -42,11 +42,9 @@ double Inthelperf_correction(double* vec, size_t dim, void* p);
 void pVegas_wrapper(double x[6], double f[1], void* par);
 double NormalizeAngle(double phi);
 
-bool cyrille=false; 
-bool correction=true;
+bool cyrille=true; 
+bool correction=false;
 bool finite_nc=false;   // true: use finite-Nc-gaussian 4-point
-
-const double UV_CUTOFF = 1.0/LAMBDAQCD;
 
 /*
  * Calculates the correction term/full integral over 6-dim. hypercube
@@ -64,7 +62,7 @@ double CrossSection2::CorrectionTerm(double pt1, double pt2, double ya, double p
     #endif
     
     cout << "# Starting MC integral, marquet: " << cyrille << ", correction: " << correction 
-        << " finite-Nc " << finite_nc << " uv-cutoff " << UV_CUTOFF << endl;
+        << " finite-Nc " << finite_nc  << endl;
 
 
     if (!N->InterpolatorInitialized(ya))
@@ -316,6 +314,8 @@ double Inthelperf_correction(double* vec, size_t dim, void* p)
     double s_u1=N->S(u1, y);
     double s_u2=N->S(u2,y);
     double s_r=N->S(r,y);
+    
+    double cutoff = LAMBDAQCD;  // IR cutoff
 
 
 
@@ -325,14 +325,17 @@ double Inthelperf_correction(double* vec, size_t dim, void* p)
     if (cyrille and !finite_nc)
     {
         result = std::cos(-pt1_dot_r - pt2_dot_r - pt2_dot_u2 + pt2_dot_u1)
-                * s_u1*s_u2*s_r; 
+                * s_u1*s_u2*s_r;
+        
+        double uv_s2 = 0;
+        if (u1 < 0.1 or u2<0.1) uv_s2=1; 
         
         result += (
             - std::cos(-pt1_dot_r - pt2_dot_r + pt2_dot_u1 + (1.0-z)*pt1_dot_u2-z*pt2_dot_u2)
              * s_u1
             - std::cos(-pt1_dot_r - pt2_dot_r - pt2_dot_u2 - (1.0-z)*pt1_dot_u1 + z*pt2_dot_u1)
              * s_u2
-            + std::cos(-pt1_dot_r - pt2_dot_r + (1.0-z)*(pt1_dot_u2 - pt1_dot_u1)
+            + uv_s2*std::cos(-pt1_dot_r - pt2_dot_r + (1.0-z)*(pt1_dot_u2 - pt1_dot_u1)
                 - z*(pt2_dot_u2 - pt2_dot_u1) )
             ) * s_r;
     }
@@ -355,14 +358,6 @@ double Inthelperf_correction(double* vec, size_t dim, void* p)
     // 3- and 2-point functions, finite-Nc accuracy
     if (cyrille and finite_nc)
     {
-        result = (-std::cos(-pt1_dot_r - pt2_dot_r + pt2_dot_u1 + (1.0-z)*pt1_dot_u2-z*pt2_dot_u2)
-                * std::pow(s_u1, Nc/(2.0*Cf))*std::pow(s_r_m_u1, -1.0/(2.0*Nc*Cf)) 
-            - std::cos(-pt1_dot_r - pt2_dot_r - pt2_dot_u2 - (1.0-z)*pt1_dot_u1 + z*pt2_dot_u1)
-                * std::pow(s_u2, Nc/(2.0*Cf))*std::pow(s_r_p_u2,-1.0/(2.0*Nc*Cf))
-            )*std::pow(s_r, Nc/(2.0*Cf))
-            +  std::cos(-pt1_dot_r - pt2_dot_r + (1.0-z)*(pt1_dot_u2 - pt1_dot_u1)
-                - z*(pt2_dot_u2 - pt2_dot_u1) ) * s_r;
-        
     }
 
     
@@ -390,8 +385,14 @@ double Inthelperf_correction(double* vec, size_t dim, void* p)
                 loglog=0;
             }
             
-            result -= ( s_r * loglog * (s_u1 * s_u2 - s_r * s_r_m_u1_p_u2)  )
-                    * cos( -pt1_dot_r - pt2_dot_r - pt2_dot_u2 + pt2_dot_u1 );
+            double tmpresult =  s_r * loglog * (s_u1 * s_u2 - s_r * s_r_m_u1_p_u2); 
+            
+            // Remove DPS, in large-\Nc it is S(b-b')S(x-x')^2
+            if (u1 > 1.0/cutoff and u2>1.0/cutoff)
+                tmpresult -= s_r * s_r * s_r_m_u1_p_u2;
+            
+            tmpresult *= cos( -pt1_dot_r - pt2_dot_r - pt2_dot_u2 + pt2_dot_u1 );
+            result -=tmpresult;
         }
         // Finite Nc
         else
@@ -463,45 +464,7 @@ double Inthelperf_correction(double* vec, size_t dim, void* p)
         result *= wf;
     }
 
-    /* 
-     * Remove infinite DPS contribution
-     */
 
-    if (correction)
-    {
-        double wf1=0; double wf2=0;
-        if (u1 > UV_CUTOFF)
-        {
-            if (M_Q > 1e-4)
-            {
-                wf1 =  (1.0+SQR(1.0-par->z))
-                            * bessel_u1[1] // gsl_sf_bessel_K1(par->z*M_Q*u1)
-                            * bessel_u1[1] //gsl_sf_bessel_K1(par->z*M_Q*u1)
-                          + SQR(par->z)* bessel_u1[0]//gsl_sf_bessel_K0(par->z*M_Q*u1)
-                            * bessel_u1[0]; //gsl_sf_bessel_K0(par->z*M_Q*u1)  ;
-            }
-            else
-                wf1 = 1.0/SQR(u1) * (1.0+SQR(1.0-par->z));
-        }
-        if (u2 > UV_CUTOFF)
-        {
-            if (M_Q > 1e-4)
-            {
-                wf2 =  (1.0+SQR(1.0-par->z))
-                            * bessel_u2[1] // gsl_sf_bessel_K1(par->z*M_Q*u2)
-                            * bessel_u2[1] //gsl_sf_bessel_K1(par->z*M_Q*u2)
-                          + SQR(par->z)* bessel_u2[0]//gsl_sf_bessel_K0(par->z*M_Q*u2)
-                            * bessel_u2[0]; //gsl_sf_bessel_K0(par->z*M_Q*u2)  ;
-            }
-            else
-                wf2 = 1.0/SQR(u1) * (1.0+SQR(1.0-par->z));
-        }
-        wf1*=0.5; wf2*=0.5;
-                
-        result -= SQR(s_r)*s_r_m_u1_p_u2 * (wf1+wf2) 
-                * cos( -pt1_dot_r - pt2_dot_r - pt2_dot_u2 + pt2_dot_u1 );
-        
-    }
 
     if (isnan(result)){
         cerr << "NAN!\n"; exit(1); }
