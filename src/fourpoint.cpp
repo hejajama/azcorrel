@@ -43,7 +43,7 @@ void pVegas_wrapper(double x[6], double f[1], void* par);
 double NormalizeAngle(double phi);
 
 bool cyrille=true; 
-bool correction=false;
+bool correction=true;
 bool finite_nc=false;   // true: use finite-Nc-gaussian 4-point
 
 /*
@@ -322,12 +322,14 @@ double Inthelperf_correction(double* vec, size_t dim, void* p)
     double result = 0;
 
 
-    if (cyrille and !finite_nc)
+    if (cyrille)
     {
-        result = std::cos(-pt1_dot_r - pt2_dot_r - pt2_dot_u2 + pt2_dot_u1)
+		// Stupid naive Large-Nc 6-point-function
+		if (!finite_nc)
+			result = std::cos(-pt1_dot_r - pt2_dot_r - pt2_dot_u2 + pt2_dot_u1)
                 * s_u1*s_u2*s_r;
         
-        double uv_s2 = 0;
+        double uv_s2 = 1;
         if (u1 < 0.1 or u2<0.1) uv_s2=1; 
         
         result += (
@@ -355,9 +357,57 @@ double Inthelperf_correction(double* vec, size_t dim, void* p)
         
     }
     
-    // 3- and 2-point functions, finite-Nc accuracy
+    // Finite-Nc part
     if (cyrille and finite_nc)
     {
+		
+		double dps_remove=0;
+		if (u1 > 1.0/cutoff and u2>1.0/cutoff)
+			dps_remove=1;
+		
+		// separate 1/Nc^2 terms 
+		double nc_suppress = s_r/(Nc*Nc) * ( 
+			cos(-pt1_dot_r - pt2_dot_r + pt1_dot_u2 - pt1_dot_u1
+								-z*(pt1_dot_u2 + pt2_dot_u2) )
+			+ cos(-pt1_dot_r - pt2_dot_r + pt1_dot_u2 - pt2_dot_u1 
+								+z*(pt1_dot_u1 +pt2_dot_u1) )
+			- cos(-pt1_dot_r - pt2_dot_r + pt1_dot_u2 - pt1_dot_u1)
+				* (1.0 - dps_remove)		// finite-Nc part of DPS cancels this
+			- cos(-pt1_dot_r - pt2_dot_r + (1.0-z)*pt1_dot_u2 - z*pt2_dot_u2
+							- (1.0-z)*pt1_dot_u1 + z*pt2_dot_u1) 
+		);
+		// Quadrupole
+		// F(b,x;x',b')
+		double f_b1x1x2b2 = 1.0/Cf * std::log( s_r_m_u1 * s_r_p_u2  / (s_r_m_u1_p_u2 * s_r ) );
+		// F(b,x';x,b')
+		double f_b1x2x1b2 = 1.0/Cf * std::log( s_u1 * s_u2 / (s_r_m_u1_p_u2 * s_r ) );
+		// F(b,b';x',x)
+		double f_b1b2x2x1 = 1.0/Cf * std::log( s_r_m_u1 * s_r_p_u2 / (s_u1 * s_u2) );
+		
+		// \Delta in Ref.
+		double f_delta = SQR( f_b1x2x1b2 ) + 4.0/SQR(Nc) * f_b1x1x2b2 * f_b1b2x2x1 ;
+		double sqrt_fdelta = std::sqrt(f_delta);
+		double quadrupole = s_u1 * s_u2 *
+			( ( (sqrt_fdelta + f_b1x2x1b2 )/2.0 - f_b1x1x2b2)/sqrt_fdelta
+				* std::exp(Nc/4.0 * sqrt_fdelta)
+			+((sqrt_fdelta - f_b1x2x1b2 )/2.0 + f_b1x1x2b2)/sqrt_fdelta
+				* std::exp(-Nc/4.0 * sqrt_fdelta) 
+			)
+			* std::exp( -Nc/4.0*f_b1x2x1b2 + 1.0/(2.0*Nc)*f_b1x1x2b2);
+		double s6 = s_r * quadrupole;
+		if (isnan(s6) or isinf(s6)) s6=0;
+		
+		result += quadrupole + nc_suppress;
+		
+		// Remove non-Nc-supressed DPS contribution
+		if (u1 > 1.0/cutoff and u2>1.0/cutoff)
+		{
+			result -= s_r*s_r*s_r_m_u1_p_u2 
+				* std::cos(-pt1_dot_r - pt2_dot_r + pt2_dot_u1 - pt2_dot_u2 );
+			
+		}
+		
+    
     }
 
     
@@ -393,37 +443,7 @@ double Inthelperf_correction(double* vec, size_t dim, void* p)
             
             tmpresult *= cos( -pt1_dot_r - pt2_dot_r - pt2_dot_u2 + pt2_dot_u1 );
             result -=tmpresult;
-        }
-        // Finite Nc
-        else
-        {
-                cerr << "FInite-Nc doesn't work!" << endl;
-            // F(b,x',x,b')
-            double f_b1x2 = 1.0/Cf * std::log( s_u1*s_u2 / (s_r_m_u1_p_u2 * s_r) );
-            // F(b,x,x',b')
-            double f_b1x1 = 1.0/Cf * std::log( s_r_m_u1 * s_r_p_u2 / (s_r_m_u1_p_u2*s_r) );
-            // F(b,b',x',x)
-            double f_b1b2 = 1.0/Cf * std::log( s_r_m_u1 * s_r_p_u2 / (s_u1*s_u2) );
-            
-            // \Delta = F^2(b,x',x,b') + 4/Nc^2 F(b,x,x',b')F(b,b',x',x)
-            double delt = SQR(f_b1x2) + 4.0/SQR(Nc)*f_b1x1 * f_b1b2;
-            double delt_sqrt = std::sqrt(delt);
-            
-            double fourp = s_r * s_u1*s_u2 *( 
-                ( (delt_sqrt + f_b1x2)/(2.0*delt_sqrt) - f_b1x1/delt_sqrt) * std::exp(Nc/4.0*delt_sqrt)
-                +( (delt_sqrt - f_b1x2)/(2.0*delt_sqrt) + f_b1x1/delt_sqrt) * std::exp(-Nc/4.0*delt_sqrt)
-                )
-                * std::exp( -Nc/4.0*f_b1x2 + 1.0/(2.0*Nc)*f_b1x1) 
-                * std::cos( -pt1_dot_r - pt2_dot_r - pt2_dot_u2 + pt2_dot_u1 );
-            
-            ///TODO: NAN
-            if (isnan(fourp)) fourp=0;
-            if (isinf(fourp)){ cerr << "infresult!\n"; exit(1);}
-            
-            result += fourp;
-            
-            
-        }
+		}
 
     }
     

@@ -152,7 +152,7 @@ double CrossSection2::dSigma(double pt1, double pt2, double y1, double y2, doubl
     
     double correction = CorrectionTerm(pt1,pt2,ya,phi,tmpz);
     // Calculate analytically integral of two-point function
-    correction += f * 2.0/kzdeltasqr * (1.0 + SQR(1.0-tmpz));
+    //correction += f * 2.0/kzdeltasqr * (1.0 + SQR(1.0-tmpz));
     //if (std::abs(correction+1.0)<0.001) return -1;
     //result +=correction;
     result = correction;
