@@ -30,7 +30,7 @@ class CrossSection2
         double Sigma(double pt1, double pt2, double y1, double y2, double sqrts);
 
 
-        double z(double pt1, double pt2, double y1, double y2);
+        double Z(double pt1, double pt2, double y1, double y2);
         double xa(double pt1, double pt2, double y1, double y2, double sqrts);
         double xh(double pt1, double pt2, double y1, double y2, double sqrts);
         double Delta(double pt1, double pt2, double theta);
@@ -45,6 +45,8 @@ class CrossSection2
         double G(double kt, double x, double z=0);
         // \int dr r*S(r)*K_0(mzr)*J0(kr)
         double H(double kt, double x, double z);
+        
+        double WavefSqr_k(double k1, double k2, double k1_dot_k2, double zfrac);	// \sum \psi(k1)\psi^*(k2)
 
         PDF* Pdf();
         FragmentationFunction* FragFun();
@@ -63,6 +65,9 @@ class CrossSection2
         double M_Q();
 
         double MaxPt(); // ptvals[ptvals.size()-1]
+        
+        bool FiniteNc();
+        void SetFiniteNc(bool fnc);
 
     private:
         double m_q; // Quark mass
@@ -93,6 +98,8 @@ class CrossSection2
 
         std::vector<double> ptvals;
         std::vector<std::string> ptstrings;
+        
+        bool finite_nc;
 
         bool apply_corrections; 
         

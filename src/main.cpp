@@ -53,12 +53,15 @@ int main(int argc, char* argv[])
         cout << "-deuteron: use deuteron as a probe" << endl;
         cout << "-output_file filename" << endl;
         cout << "-points points" << endl;
+        cout << "-finite_nc: use finite Nc when calculating quadrupole" << endl;
         return 0;
     }
 
     MODE mode = MODE_DSIGMA;
     int points=10;
     double minphi=0.5, maxphi=M_PI;
+    
+    bool finite_nc=false;
 
     #ifdef USE_MPI
     int rc = MPI_Init(&argc, &argv);
@@ -114,7 +117,7 @@ int main(int argc, char* argv[])
             minphi = StrToReal(argv[i+1]);
         else if (string(argv[i])=="-maxphi")
             maxphi = StrToReal(argv[i+1]);
-        else if (string(argv[i])=="-amplitude")
+        else if (string(argv[i])=="-amplitude" or string(argv[i])=="-data")
             amplitude_filename = argv[i+1];
         else if (string(argv[i])=="-pdf")
             Q=StrToReal(argv[i+1]);
@@ -167,6 +170,8 @@ int main(int argc, char* argv[])
             deuteron=true;
         else if (string(argv[i])=="-output_file")
             output_file = argv[i+1];
+        else if (string(argv[i])=="-finite_nc")
+			finite_nc=true;
         else if (string(argv[i]).substr(0,1)=="-")
         {
             cerr << "Unrecoginzed parameter " << argv[i] << endl;
@@ -195,6 +200,7 @@ int main(int argc, char* argv[])
     CrossSection2 cross_section(&amplitude, pdf, &fragmentation);
     cross_section.SetMCIntPoints(mcintpoints);
     cross_section.SetM_Q(mq);
+    cross_section.SetFiniteNc(finite_nc);
     double ya=std::log(amplitude.X0() / cross_section.xa(pt1,pt2,y1,y2,sqrts));
     
     /*
@@ -229,7 +235,7 @@ int main(int argc, char* argv[])
     " y_A=" << ya << endl;
     infostr << "# x1=" << pt1*std::exp(y1)/sqrts << ", x2=" << pt2*std::exp(y2)/sqrts
         << " sqrts=" << sqrts << endl;
-    infostr << "# z=" << cross_section.z(pt1,pt2,y1,y2) <<", 1-z=" << cross_section.z(pt2,pt1,y2,y1)
+    infostr << "# z=" << cross_section.Z(pt1,pt2,y1,y2) <<", 1-z=" << 1.0-cross_section.Z(pt2,pt1,y2,y1)
         << " xa=" << cross_section.xa(pt1,pt2,y1,y2,sqrts)
         << " xh=" << cross_section.xh(pt1,pt2,y1,y2,sqrts)  
         << " x_0=" << amplitude.X0() << endl;
@@ -259,7 +265,7 @@ int main(int argc, char* argv[])
 
     // FFTW
     if (fftw)
-        cross_section.CalculateCorrection_fft(ya, cross_section.z(pt1,pt2,y1,y2));
+        cross_section.CalculateCorrection_fft(ya, cross_section.Z(pt1,pt2,y1,y2));
 
     if (fftw and multiply_pdf)
         cerr <<"Can't calculate FFT and multiply by PDF!" << endl;
@@ -268,7 +274,7 @@ int main(int argc, char* argv[])
         cross_section.LoadPtData(y1,y2);
     int ready=0;
     
-    #pragma omp parallel for
+    //#pragma omp parallel for
     for (int i=0; i<points; i++)
     {
         //double theta = 0.2*2.0*M_PI*(i+1.0);
@@ -297,6 +303,8 @@ int main(int argc, char* argv[])
         if (mode==MODE_DSIGMA)
         {
             result = cross_section.dSigma(pt1,pt2,y1,y2,theta,sqrts,multiply_pdf);
+            if (result < 0)	// convergence problem
+				return -1;
         }
 
         #pragma omp critical

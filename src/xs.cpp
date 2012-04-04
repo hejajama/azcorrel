@@ -5,6 +5,7 @@
  */
 
 #include "xs.hpp"
+#include "config.hpp"
 #include <tools/interpolation2d.hpp>
 #include <gsl/gsl_integration.h>
 #include <gsl/gsl_monte_miser.h>
@@ -15,6 +16,10 @@
 #include <fstream>
 #include <string>
 #include <sstream>
+
+#ifdef USE_MPI
+    #include <mpi.h>
+#endif
 
 
 extern "C"
@@ -30,7 +35,7 @@ extern "C"
 double CrossSection2::dSigma_lo(double pt1, double pt2, double y1, double y2, double theta,
     double sqrts, bool multiply_pdf)
 {
-    double tmpz = z(pt1, pt2, y1, y2);
+    double tmpz = Z(pt1, pt2, y1, y2);
     double tmpxa = xa(pt1, pt2, y1, y2, sqrts);
 
     //double result = std::pow(1.0-tmpz, 3.0)*(1.0+SQR(1.0-tmpz));
@@ -74,7 +79,7 @@ double CrossSection2::dSigma(double pt1, double pt2, double y1, double y2, doubl
 {
     //return dSigma_lo(pt1, pt2, y1,y2, phi, sqrts);
     double result=0;
-    double tmpz = z(pt1, pt2, y1, y2);
+    double tmpz = Z(pt1, pt2, y1, y2);
     double tmpxa = xa(pt1, pt2, y1, y2, sqrts);
     double ya = std::log(N->X0()/tmpxa);
     if (ya<0)
@@ -113,6 +118,7 @@ double CrossSection2::dSigma(double pt1, double pt2, double y1, double y2, doubl
     // \kappa^2 = (k - z\delta)^2 = (1-z)^2 pt1^2 + z^2 pt2^2 - 2*z*(1-z)*pt1*pt2*cos \phi
     double kzdeltasqr = SQR(1.0-tmpz)*SQR(pt1) + SQR(tmpz*pt2) - 2.0*tmpz*(1.0-tmpz)
                                 * pt1*pt2*std::cos(phi);
+    double kappa = std::sqrt(kzdeltasqr);
 
     //cout << "# phi " << phi << " delta " << delta << "kzdeltasqr " << kzdeltasqr <<   endl;
     // m=0
@@ -149,14 +155,37 @@ double CrossSection2::dSigma(double pt1, double pt2, double y1, double y2, doubl
     //cout << "# phi=" << phi << ", result w.o. corrections = " << result << endl;
 
     // CorrectionTerm returns -1 if the integral doesn't converge
+    double correction=0;
+    #ifdef USE_MPI
+		int id;
+		MPI_Comm_rank(MPI_COMM_WORLD, &id);
+		if (id==0)
+		    cout << "# uncorrected result " << result << endl;
+	#endif
+    correction = CorrectionTerm(pt1,pt2,ya,phi,tmpz);
+    if (correction < -10)
+		return -1;
+    // Nc-supprsesed terms analytically
+    double nc_suppress=0;		// pt1  pt2  pt1_dot_pt2
+    nc_suppress += 2.0*WavefSqr_k(pt1, kappa, (1.0-tmpz)*SQR(pt1) - tmpz*pt1*pt2*std::cos(phi), tmpz); // 2\psi(k)\psi(\kappa)^*
+    nc_suppress -= WavefSqr_k(kappa, kappa, kappa*kappa, tmpz);	// -\psi(\kappa)\psi^*(\kappa)
+    nc_suppress -= WavefSqr_k(pt1, pt1, pt1*pt1, tmpz);			// -\psi(k)\psi^*(k)
+    nc_suppress *= 1.0/SQR(Nc);
+    nc_suppress *= f;
+    //correction +=nc_suppress;  
     
-    double correction = CorrectionTerm(pt1,pt2,ya,phi,tmpz);
     // Calculate analytically integral of two-point function
     //correction += f * 2.0/kzdeltasqr * (1.0 + SQR(1.0-tmpz));
     //if (std::abs(correction+1.0)<0.001) return -1;
     //result +=correction;
-    result = correction;
-    
+    result += correction;
+    /*
+    result += (1.0/kzdeltasqr + 2.0*g*( (1.0-tmpz)*pt1*pt2*std::cos(phi)
+                    - tmpz*SQR(pt2) ) / ( pt2*kzdeltasqr ) ) * 2.0*(1.0+SQR(1.0-tmpz))*f;
+     
+    // Remove added term
+    result -= f * 2.0/(SQR(M_PI*pt2)) * SQR( 1.0 - 1.0/std::sqrt(1.0 - SQR(pt2*0.1))) * (1.0+SQR(1.0-tmpz));	// \lambda = 0.1 GeV^-1
+    */
     /*result = CorrectionTerm_fft(pt1, pt2, ya, phi);
     #pragma omp critical
     cout <<"# phi=" << phi <<" MC result " << result << endl;
@@ -461,11 +490,11 @@ double dSigma_full_helperf_z2(double z2, void* p)
         (par->pt_interpolator->Evaluate(par->pt1/par->z1, par->pt2/z2)
         //+ 0 * par->pt_interpolator_cor->Evaluate(par->pt1/par->z1, par->pt2/z2)
         )
-        * (1.0 - par->xs->z(par->pt1/par->z1, par->pt2/z2, par->y1, par->y2));
+        * (1.0 - par->xs->Z(par->pt1/par->z1, par->pt2/z2, par->y1, par->y2));
       
     /*double result2 = par->xs->dSigma(par->pt1/par->z1, par->pt2/z2, par->y1, par->y2, par->phi,
             par->sqrts, false)
-            *(1.0 - par->xs->z(par->pt1/par->z1, par->pt2/z2, par->y1, par->y2)) ; 
+            *(1.0 - par->xs->Z(par->pt1/par->z1, par->pt2/z2, par->y1, par->y2)) ; 
     */
     double xf_frag1 = 
           xf_u
@@ -513,12 +542,12 @@ double dSigma_full_helperf_z2(double z2, void* p)
     result += (par->pt_interpolator_rev->Evaluate(par->pt2/z2, par->pt1/par->z1)
             //+ 0 *par->pt_interpolator_rev_cor->Evaluate(par->pt2/z2, par->pt1/par->z1)
             )
-        * (1.0 - par->xs->z(par->pt2/z2, par->pt1/par->z1, par->y2, par->y1))   
+        * (1.0 - par->xs->Z(par->pt2/z2, par->pt1/par->z1, par->y2, par->y1))   
         * xf_frag2;
     /*
     result2 += par->xs->dSigma(par->pt2/z2, par->pt1/par->z1, par->y2, par->y1, par->phi,
             par->sqrts, false)
-            *(1.0 - par->xs->z(par->pt2/z2, par->pt1/par->z1, par->y2, par->y1))
+            *(1.0 - par->xs->Z(par->pt2/z2, par->pt1/par->z1, par->y2, par->y1))
             * xf_frag2 ; 
     */
     /*
@@ -820,6 +849,17 @@ double H_helperf(double r, void *p)
     return result;
 }
 
+/*
+ * Wave function product summed over spins and helicities
+ * Momentum space
+ * zfrac: momentum fraction z
+ */
+double CrossSection2::WavefSqr_k(double k1, double k2, double k1_dot_k2, double zfrac)
+{
+	return 2.0*(k1_dot_k2*(1.0+SQR(1.0-zfrac)) + SQR(M_Q()*zfrac*zfrac))
+		/ ( (SQR(k1)+SQR(M_Q()*zfrac))*(SQR(k2)+SQR(M_Q()*zfrac)) );
+}
+
 CrossSection2::CrossSection2(AmplitudeLib* N_, PDF* pdf_,FragmentationFunction* frag)
 {
     N=N_; pdf=pdf_; fragfun=frag;
@@ -845,6 +885,7 @@ CrossSection2::CrossSection2(AmplitudeLib* N_, PDF* pdf_,FragmentationFunction* 
     }
 
     apply_corrections = false;
+    finite_nc=false;
 }
 
 
@@ -853,7 +894,7 @@ double CrossSection2::Delta(double pt1, double pt2, double theta)
     return std::sqrt( SQR(pt1) + SQR(pt2) + 2.0*pt1*pt2*std::cos(theta) );
 }
 
-double CrossSection2::z(double pt1, double pt2, double y1, double y2)
+double CrossSection2::Z(double pt1, double pt2, double y1, double y2)
 {
     return std::abs(pt1)*std::exp(y1)
         / (std::abs(pt1)*std::exp(y1) + std::abs(pt2)*std::exp(y2) );
@@ -940,6 +981,16 @@ Interpolator2D * CrossSection2::Ptinterpolator2d_rev()
 AmplitudeLib* CrossSection2::GetN()
 {
     return N;
+}
+
+void CrossSection2::SetFiniteNc(bool fnc)
+{
+	finite_nc=fnc;
+}
+
+bool CrossSection2::FiniteNc()
+{
+	return finite_nc;
 }
 
  // The following piece of code is so ugly it is hidden at the bottom of this
