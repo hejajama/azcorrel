@@ -153,6 +153,17 @@ double CrossSection2::dSigma(double pt1, double pt2, double y1, double y2, doubl
     result *= f;
     //#pragma omp critical
     //cout << "# phi=" << phi << ", result w.o. corrections = " << result << endl;
+    
+        double nc_suppress=0;		// pt1  pt2  pt1_dot_pt2
+    if (FiniteNc())
+    {
+		nc_suppress += 2.0*WavefSqr_k(pt1, kappa, (1.0-tmpz)*SQR(pt1) - tmpz*pt1*pt2*std::cos(phi), tmpz); // 2\psi(k)\psi(\kappa)^*
+		nc_suppress -= WavefSqr_k(kappa, kappa, kappa*kappa, tmpz);	// -\psi(\kappa)\psi^*(\kappa)
+		//nc_suppress -= WavefSqr_k(pt1, pt1, pt1*pt1, tmpz);			// -\psi(k)\psi^*(k), numerically as contains DPS contribution
+		nc_suppress *= 1.0/SQR(Nc);
+		nc_suppress *= f;
+	}
+	nc_suppress=0;///DEBUG
 
     // CorrectionTerm returns -1 if the integral doesn't converge
     double correction=0;
@@ -160,36 +171,17 @@ double CrossSection2::dSigma(double pt1, double pt2, double y1, double y2, doubl
 		int id;
 		MPI_Comm_rank(MPI_COMM_WORLD, &id);
 		if (id==0)
-		    cout << "# uncorrected result " << result << endl;
+		    cout << "# uncorrected result " << result << " nc-suppressed " << nc_suppress << endl;
 	#endif
     correction = CorrectionTerm(pt1,pt2,ya,phi,tmpz);
     if (correction < -10)
 		return -1;
     // Nc-supprsesed terms analytically
-    double nc_suppress=0;		// pt1  pt2  pt1_dot_pt2
-    nc_suppress += 2.0*WavefSqr_k(pt1, kappa, (1.0-tmpz)*SQR(pt1) - tmpz*pt1*pt2*std::cos(phi), tmpz); // 2\psi(k)\psi(\kappa)^*
-    nc_suppress -= WavefSqr_k(kappa, kappa, kappa*kappa, tmpz);	// -\psi(\kappa)\psi^*(\kappa)
-    nc_suppress -= WavefSqr_k(pt1, pt1, pt1*pt1, tmpz);			// -\psi(k)\psi^*(k)
-    nc_suppress *= 1.0/SQR(Nc);
-    nc_suppress *= f;
-    //correction +=nc_suppress;  
+
+    correction +=nc_suppress;  
     
-    // Calculate analytically integral of two-point function
-    //correction += f * 2.0/kzdeltasqr * (1.0 + SQR(1.0-tmpz));
-    //if (std::abs(correction+1.0)<0.001) return -1;
-    //result +=correction;
+
     result += correction;
-    /*
-    result += (1.0/kzdeltasqr + 2.0*g*( (1.0-tmpz)*pt1*pt2*std::cos(phi)
-                    - tmpz*SQR(pt2) ) / ( pt2*kzdeltasqr ) ) * 2.0*(1.0+SQR(1.0-tmpz))*f;
-     
-    // Remove added term
-    result -= f * 2.0/(SQR(M_PI*pt2)) * SQR( 1.0 - 1.0/std::sqrt(1.0 - SQR(pt2*0.1))) * (1.0+SQR(1.0-tmpz));	// \lambda = 0.1 GeV^-1
-    */
-    /*result = CorrectionTerm_fft(pt1, pt2, ya, phi);
-    #pragma omp critical
-    cout <<"# phi=" << phi <<" MC result " << result << endl;
-    */
 
     if (!multiply_pdf)
     {
@@ -591,10 +583,10 @@ double CrossSection2::dSigma_integrated(double minpt1, double minpt2, double min
 
     std::vector<double> yvals;
     yvals.push_back(2.4);
-    yvals.push_back(2.8);
-    yvals.push_back(3.2);
-    yvals.push_back(3.6);
-    yvals.push_back(4);
+    //yvals.push_back(2.8);
+    //yvals.push_back(3.2);
+    //yvals.push_back(3.6);
+    //yvals.push_back(4);
     maxy=yvals[yvals.size()-1]; miny=yvals[0];
     helper.miny=miny; helper.maxy=maxy;
     
@@ -641,24 +633,26 @@ double CrossSection2::dSigma_integrated(double minpt1, double minpt2, double min
             /*if (y2ind==1) y2intres += 4.0*intresult;
             else y2intres += intresult;
             */
-            if (y2ind==1 or y2ind == 3) y2intres += 4.0*intresult;
+            /*if (y2ind==1 or y2ind == 3) y2intres += 4.0*intresult;
             else if (y2ind==2) y2intres += 2.0*intresult;
-            else y2intres += intresult;
+            else y2intres += intresult;*/
+            y2intres +=intresult;
         }
         //y2intres *= (maxy-miny)/6.0;
         /*if (y1ind==1) result += 4.0*y2intres;
         else result += y2intres;
         */
         
-        y2intres *= (maxy-miny)/12.0;
+        /*y2intres *= (maxy-miny)/12.0;
         if (y1ind==1 or y1ind==3) result += 4.0*y2intres;
         else if (y1ind==2) result += 2.0*y2intres;
         else result += y2intres;
-        
+        */
+        result += y2intres;
         
     }
     //result *= (maxy-miny)/6.0;
-    result *= (maxy-miny)/12.0;
+    //result *= (maxy-miny)/12.0;
     
     return result*2.0*M_PI; //2pi from one angular integral
 }
@@ -876,8 +870,9 @@ CrossSection2::CrossSection2(AmplitudeLib* N_, PDF* pdf_,FragmentationFunction* 
     ptinterpolator2d_correction = NULL;
     ptinterpolator2d_rev_correction = NULL;
 
+	double maxpt=6, ptstep=0.25;
     //for (double pt = 1; pt<=9.5; pt+=0.5)
-    for (double pt=1; pt<=7; pt+=0.25)
+    for (double pt=1; pt<=maxpt; pt+=ptstep)
     {
         ptvals.push_back(pt);
         std::stringstream s; s << pt;
@@ -886,6 +881,22 @@ CrossSection2::CrossSection2(AmplitudeLib* N_, PDF* pdf_,FragmentationFunction* 
 
     apply_corrections = false;
     finite_nc=false;
+    
+        
+        
+     //std::string fileprefix = "rhic_pp/";
+    //string fileprefix = "rhic_central_025/";
+    //string fileprefix = "finite_vs_large/";
+    fileprefix = "marquet/";
+    fileprefix_cor = "rhic_korjaus_central/";
+	postfix = "_largenc";
+	#ifdef USE_MPI
+	int id;
+	MPI_Comm_rank(MPI_COMM_WORLD, &id);
+	if (id==0)
+	#endif
+		    cout << "# Loading data from " << fileprefix << " postfix " << postfix << " up to " << maxpt << " ptstep " << ptstep << endl;
+	
 }
 
 
@@ -1040,11 +1051,6 @@ int CrossSection2::LoadPtData(double y1, double y2)
     ptinterpolators_correction.clear();
     ptinterpolators_rev_correction.clear();
 
-    //std::string fileprefix = "rhic_pp/";
-    //string fileprefix = "rhic_central_025/";
-    string fileprefix = "rhic_central_025/";
-    string fileprefix_cor = "rhic_korjaus_central/";
-
    int points=ptvals.size();
    for (int pt1ind=0; pt1ind<points; pt1ind++)
    {
@@ -1055,16 +1061,18 @@ int CrossSection2::LoadPtData(double y1, double y2)
        for (int pt2ind=0; pt2ind<points; pt2ind++)
        {
             std::stringstream fname, fname_rev, fname_cor, fname_rev_cor;
-            /*fname << fileprefix << "pt1_" << ptstrings[pt1ind] << "_pt2_"
-                << ptstrings[pt2ind] << "_y1_" << y1str << "_y2_" << y2str;
-            fname_rev << fileprefix << "pt1_" << ptstrings[pt2ind] << "_pt2_"
-                << ptstrings[pt1ind] << "_y1_" << y2str << "_y2_" << y1str;
-              */  
-            fname << fileprefix << "y1_" << y1str <<"_y2_" << y2str << "/cyrille_pt1_"
+           /*fname << fileprefix << "pt1_" << ptstrings[pt1ind] << "_pt2_"
+                << ptstrings[pt2ind] << "_y1_" << y1str << "_y2_" << y2str << postfix;
+            fname_rev << fileprefix << "pt1_" << ptstrings[pt1ind] << "_pt2_"
+                << ptstrings[pt2ind] << "_y1_" << y2str << "_y2_" << y1str << postfix;
+            */
+               
+            fname << fileprefix << "y1_" << y1str <<"_y2_" << y2str << "/pt1_"
                 << ptstrings[pt1ind] <<"_pt2_" << ptstrings[pt2ind];
-            fname_rev << fileprefix << "y1_" << y2str <<"_y2_" << y1str << "/cyrille_pt1_"
+            fname_rev << fileprefix << "y1_" << y2str <<"_y2_" << y1str << "/pt1_"
                 << ptstrings[pt1ind] <<"_pt2_" << ptstrings[pt2ind];
-
+              
+		
             fname_cor << fileprefix_cor << "korjaus_pt1_" << ptstrings[pt1ind] << "_pt2_" << ptstrings[pt2ind]
                 << "_y1_" << y1str <<"_y2_" << y2str;
             fname_rev_cor << fileprefix_cor  << "korjaus_pt1_" << ptstrings[pt1ind] << "_pt2_" << ptstrings[pt2ind]

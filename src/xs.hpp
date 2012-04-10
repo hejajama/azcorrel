@@ -95,6 +95,11 @@ class CrossSection2
         std::vector<std::vector< Interpolator*> > ptinterpolators_rev_correction;
         Interpolator2D *ptinterpolator2d_correction;
         Interpolator2D *ptinterpolator2d_rev_correction;
+        
+        // Where to read ptdata
+		string fileprefix; 
+		string fileprefix_cor; 
+		string postfix;
 
         std::vector<double> ptvals;
         std::vector<std::string> ptstrings;

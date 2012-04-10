@@ -64,7 +64,7 @@ double CrossSection2::CorrectionTerm(double pt1, double pt2, double ya, double p
     
     
     cout << "# Starting MC integral, marquet: " << cyrille << ", correction: " << correction 
-        << " finite-Nc " << FiniteNc()  << endl;
+        << " finite-Nc " << FiniteNc() << " ir-cutoff " << IR_CUTOFF << " GeV " << endl;
 
 
     if (!N->InterpolatorInitialized(ya))
@@ -99,7 +99,7 @@ double CrossSection2::CorrectionTerm(double pt1, double pt2, double ya, double p
             helper.xs=this; helper.finite_nc=FiniteNc();
              
         #ifndef USE_MPI
-            double (*integrand)(double*,size_t,void*) = Inthelperf_correction2;
+            double (*integrand)(double*,size_t,void*) = Inthelperf_correction;
             const gsl_rng_type *T = gsl_rng_default;
             //gsl_rng_env_setup();
             gsl_monte_function G = {integrand, 6, &helper};
@@ -266,7 +266,8 @@ double CrossSection2::CorrectionTerm(double pt1, double pt2, double ya, double p
     return res;
 }
 
-
+// smooth step function
+double step(double x) { return 1.0/(1.0+std::exp(-8.0*x)); }
 
 
 double Inthelperf_correction(double* vec, size_t dim, void* p)
@@ -359,24 +360,14 @@ double Inthelperf_correction(double* vec, size_t dim, void* p)
     if (correction)
     {
 		
-		/*double dps_remove=0;
-		if (u1 > 1.0/IR_CUTOFF and u2>1.0/IR_CUTOFF)
-			dps_remove=0;
-		
-		// separate 1/Nc^2 terms; computed analytically in xs.cpp (w.o. DPS)
-		double nc_suppress = 0;/*s_r/(Nc*Nc) * ( 
-			cos(-pt1_dot_r - pt2_dot_r + pt1_dot_u2 - pt1_dot_u1
-								-z*(pt1_dot_u2 + pt2_dot_u2) )	// S^3
-			+ cos(-pt1_dot_r - pt2_dot_r + pt1_dot_u2 - pt2_dot_u1 
-								+z*(pt1_dot_u1 +pt2_dot_u1) )	// S^3
+		// separate 1/Nc^2 terms which contain DPS contribution, non-DPS
+		// terms are computed analytically in xs.cpp
+		double nc_suppress = s_r * ( 
 			- cos(-pt1_dot_r - pt2_dot_r + pt1_dot_u2 - pt1_dot_u1)
-				* (1.0 - dps_remove)		// S^6, finite-Nc part of DPS cancels this
-			- cos(-pt1_dot_r - pt2_dot_r + (1.0-z)*pt1_dot_u2 - z*pt2_dot_u2	// S^2
-							- (1.0-z)*pt1_dot_u1 + z*pt2_dot_u1) 
-		);*/
+		) * (1.0 -  step(u1-1.0/IR_CUTOFF)*step(u2-1.0/IR_CUTOFF));
+		nc_suppress=0;
 		
-		
-		double s6=0;
+		double s6=0,quadrupole=0;
 		// Quadrupole
 		// Finite-Nc
 		if (finite_nc)
@@ -393,15 +384,15 @@ double Inthelperf_correction(double* vec, size_t dim, void* p)
 			double sqrt_fdelta = std::sqrt(f_delta);
 			//if (isnan(f_delta) or isnan(f_b1x1x2b2) or isnan(f_b1x2x1b2))
 			//	cout << "sqrtdelta nan: u1 " << u1 << " u2 " << u2 << " r " << r << " r-u1 " << r_m_u1 << " r+u2 " << r_p_u2 << " r-u1+u2 " << r_m_u1_p_u2 << endl;
-			double quadrupole = s_u1 * s_u2 *
+			quadrupole = s_u1 * s_u2 *
 				( ( (sqrt_fdelta + f_b1x2x1b2 )/2.0 - f_b1x1x2b2)/sqrt_fdelta
 					* std::exp(Nc/4.0 * sqrt_fdelta)
 				+((sqrt_fdelta - f_b1x2x1b2 )/2.0 + f_b1x1x2b2)/sqrt_fdelta
 					* std::exp(-Nc/4.0 * sqrt_fdelta) 
 				)
 				* std::exp( -Nc/4.0*f_b1x2x1b2 + 1.0/(2.0*Nc)*f_b1x1x2b2);
-			if (isnan(quadrupole) or isinf(quadrupole)) { quadrupole=0; }
-			s6 = s_r * quadrupole;
+			if (isnan(quadrupole) or isinf(quadrupole)) { s6=0; }
+			else s6 = s_r * quadrupole;
 		}
 		else
 		{
@@ -423,22 +414,20 @@ double Inthelperf_correction(double* vec, size_t dim, void* p)
 			s6 = s_r*s_u1*s_u2 - s_r * loglog * (s_u1 * s_u2 - s_r * s_r_m_u1_p_u2); 		
 		}
 		
-		result = s6*cos( -pt1_dot_r - pt2_dot_r - pt2_dot_u2 + pt2_dot_u1 );
+		result = s6*cos( -pt1_dot_r - pt2_dot_r - pt2_dot_u2 + pt2_dot_u1 ) + 1.0/SQR(Nc)*nc_suppress;
 		
 		// Remove non-Nc-supressed DPS contribution
 		//if (u1 > 1.0/cutoff and u2>1.0/cutoff)
-		//if (!isnan(s6))
+		if (!isnan(quadrupole) and !isinf(quadrupole))
 		{
 			result -= s_r*s_r*s_r_m_u1_p_u2 
 				* std::cos(-pt1_dot_r - pt2_dot_r + pt2_dot_u1 - pt2_dot_u2 )
-				* 1.0/(1.0+std::exp(-8.0*(u1-1.0/IR_CUTOFF)))* 1.0/(1.0+std::exp(-8.0*(u2-1.0/IR_CUTOFF)));	// \theta(u1-1/CUTOFF)\tehta(u2-1/CUTOFF)			
+				* step(u1-1.0/IR_CUTOFF)* step(u2-1.0/IR_CUTOFF);	// \theta(u1-1/CUTOFF)\tehta(u2-1/CUTOFF)			
 		}
 		// Subtract this here in order to force the integrand to vanish in UV,
 		// contribution calculated/compensated analytically in xs.cpp
 		result -= s_r*s_u1*s_u2*std::cos(-pt1_dot_r - pt2_dot_r - pt2_dot_u2 + pt2_dot_u1);
 		
-		/// DEBUG!!!!
-		//result = nc_suppress;
 		
     
     }
