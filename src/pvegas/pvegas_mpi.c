@@ -70,8 +70,10 @@
  * Richard Kreckel, ThEP, Univ. Mainz, December 1997 - October 2000 */
 
 /*
- * Changed by H.M. 01/2012: user can pass a void pointer to parameter struct
- * to the integrand */
+ * Changed by H.M. 01/2012-04/2012: 
+ * - user can pass a void pointer to parameter struct to the integrand
+ * - number of calls is an unsigned long long int variable, not double
+ */
 
 #include <mpi.h>
 #include <stdio.h>
@@ -438,7 +440,7 @@ void vegas(double regn[], int ndim, void (*fxn)(double x[], double f[], void* p)
     if (wrks>wmax) wrks = wmax;
     for (k=1,i=0; i<ndim; i++) k *= ng;
     npg = (ncall/k>2) ? (ncall/k) : (2);
-    calls = (double)npg * (double)k;
+    calls = npg * k;
     dxg = 1.0/ng;
 
     for (dv2g=1,i=0; i<ndim; i++) dv2g *= dxg;    
@@ -456,13 +458,13 @@ void vegas(double regn[], int ndim, void (*fxn)(double x[], double f[], void* p)
       ndo = nd;
     }
     if (!p_rank && nprn & NPRN_INPUT) {
-      printf("%s:  ndim= %3d  ncall= %llu   %3d+1/%3d CPU(s)\n",
-             " Input parameters for vegas",ndim,calls,wrks,p_size);
-      printf("% 28s  ittot=%5d  itmx=%5d    %5d^%1d hypercubes\n"," ",ittot,itmx,ng,ndim_par);
-      printf("%28s  nprn=0x%04x  ALPH=%5.2f\n"," ",nprn,ALPH);
-      printf("%28s  mds=%3d  nd=%4d%15s npg=%d\n"," ",mds,nd," ",npg);
+      printf("# %s:  ndim= %3d  ncall= %llu   %3d+1/%3d CPU(s)\n",
+             "#  Input parameters for vegas",ndim,calls,wrks,p_size);
+      printf("# % 28s  ittot=%5d  itmx=%5d    %5d^%1d hypercubes\n"," ",ittot,itmx,ng,ndim_par);
+      printf("# %28s  nprn=0x%04x  ALPH=%5.2f\n"," ",nprn,ALPH);
+      printf("# %28s  mds=%3d  nd=%4d%15s npg=%d\n"," ",mds,nd," ",npg);
       for (j=0; j<ndim; j++) {
-        printf("%30s xl[%2d]= %11.4g xu[%2d]= %11.4g\n",
+        printf("# %30s xl[%2d]= %11.4g xu[%2d]= %11.4g\n",
                " ",j,regn[j],j,regn[j+ndim]);
       }
     }

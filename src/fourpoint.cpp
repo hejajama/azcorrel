@@ -56,15 +56,17 @@ double CrossSection2::CorrectionTerm(double pt1, double pt2, double ya, double p
 
 {
     std::time_t start = std::time(NULL);
+    //IR_CUTOFF = std::max(pt1, pt2);
     #ifdef USE_MPI
     int id;
     MPI_Comm_rank(MPI_COMM_WORLD, &id);
     if(id==0) 
     #endif
-    
-    
     cout << "# Starting MC integral, marquet: " << cyrille << ", correction: " << correction 
         << " finite-Nc " << FiniteNc() << " ir-cutoff " << IR_CUTOFF << " GeV " << endl;
+    
+    
+    
 
 
     if (!N->InterpolatorInitialized(ya))
@@ -167,15 +169,18 @@ double CrossSection2::CorrectionTerm(double pt1, double pt2, double ya, double p
 
 
 
-
-
-
     /// MPI & PVEGAS
+    if (mcintpoints > 2*mcintpoints_orig)
+		mcintpoints /= 2;
+	
+	
+    
     #ifdef USE_MPI
     double estim[1];   // estimators for integrals 
     double std_dev[1]; // standard deviations              
     double chi2a[1];   // chi^2/n       
     int workers = 1;
+    
     MPI_Comm_size(MPI_COMM_WORLD, &workers);
     workers--;
     if (workers==0)
@@ -193,6 +198,7 @@ double CrossSection2::CorrectionTerm(double pt1, double pt2, double ya, double p
     reg[dim+3]=2.0*M_PI; reg[dim+4]=2.0*M_PI; reg[dim+5]=2.0*M_PI;
 
     time_t t;
+    vegasint:	// We return to this (using goto) if integral doesn't converge
     time(&t);
     
     // set up the grid (init = 0) with 5 iterations of 1000 samples,
@@ -224,39 +230,31 @@ double CrossSection2::CorrectionTerm(double pt1, double pt2, double ya, double p
             2, mcintpoints, 2,   NPRN_RESULT,
             functions, 0,  workers,
             estim, std_dev, chi2a, &helper);
-/*
-    if (std_dev[0]/estim[0]>0.07)
-    {
-        cout <<"# phi=" << phi <<", relerr " << std_dev[0]/estim[0] <<", trying "
-            <<"to increase number of MCpoitns to "<< mcintpoints*5 << endl;
-        vegas(reg, dim, pVegas_wrapper,
-            1, mcintpoints/2, 5, NPRN_RESULT,
-            functions, 0, workers,
-            estim, std_dev, chi2a, &helper);
-        // final sample, inheriting previous results (init = 2)
-        vegas(reg, dim, pVegas_wrapper,
-            2, mcintpoints*5, 2, NPRN_RESULT,
-            functions, 0,  workers,
-            estim, std_dev, chi2a, &helper);
-    }
-*/
+
     if (id==0)
     {
       cout << "# phi=" << phi << " result: " << estim[0] << " +/- " << std_dev[0]
-        << " relerr " << std_dev[0]/estim[0] << " time "
+        << " relerr " << std::abs(std_dev[0]/estim[0]) << " time "
        << (std::time(NULL)-start)/60.0/60.0 << " h"<< endl;
-
-        if (std::abs(std_dev[0]/estim[0]) > 0.05)
-        {
-            cout << "#!!!!!!!!!!!!!!! INTEGRAL DOESN'T CONVERGE!?!?!?" << endl;
-            cerr <<"INTEGRAL DOESN'T CONVERGE! phi=" << phi
+	}
+    if (std::abs(std_dev[0]/estim[0]) > 0.07)
+    {
+		mcintpoints*=3;
+		if (id==0)
+		{
+            //cout << "#!!!!!!!!!!!!!!! INTEGRAL DOESN'T CONVERGE!?!?!?" << endl;
+            cout <<"# INTEGRAL DOESN'T CONVERGE! phi=" << phi
                 << " result: " << estim[0] << " +/- " << std_dev[0]
                 << " relerr " << std::abs(std_dev[0]/estim[0]) << " pt1 " << pt1 << " pt2 "
-                << pt2 << " z " << z << endl;
-			return -100;
-        }
-
+                << pt2 << " z " << z << " increasing mcintpoints from " << mcintpoints << " to " << mcintpoints*3 << endl;
+		}
+		return -100;
+		if (mcintpoints > 128*mcintpoints_orig)
+			return -100; 
+		goto vegasint;
     }
+
+    
 
     
     
@@ -324,6 +322,7 @@ double Inthelperf_correction(double* vec, size_t dim, void* p)
 	
     if (cyrille)
     {
+		//cerr << "Do we really want to calculate this?\n";
 		// Stupid naive Large-Nc 6-point-function
 		if (!finite_nc)
 			result = std::cos(-pt1_dot_r - pt2_dot_r - pt2_dot_u2 + pt2_dot_u1)
@@ -362,10 +361,13 @@ double Inthelperf_correction(double* vec, size_t dim, void* p)
 		
 		// separate 1/Nc^2 terms which contain DPS contribution, non-DPS
 		// terms are computed analytically in xs.cpp
-		double nc_suppress = s_r * ( 
-			- cos(-pt1_dot_r - pt2_dot_r + pt1_dot_u2 - pt1_dot_u1)
-		) * (1.0 -  step(u1-1.0/IR_CUTOFF)*step(u2-1.0/IR_CUTOFF));
-		nc_suppress=0;
+		double nc_suppress=0;
+		if (finite_nc)
+		{
+				nc_suppress = s_r * cos(-pt1_dot_r - pt2_dot_r + pt1_dot_u2 - pt1_dot_u1)
+					* (- 1.0 +  step(u1-1.0/IR_CUTOFF)*step(u2-1.0/IR_CUTOFF));
+			nc_suppress *= 1.0/SQR(Nc);
+		}
 		
 		double s6=0,quadrupole=0;
 		// Quadrupole
@@ -414,21 +416,26 @@ double Inthelperf_correction(double* vec, size_t dim, void* p)
 			s6 = s_r*s_u1*s_u2 - s_r * loglog * (s_u1 * s_u2 - s_r * s_r_m_u1_p_u2); 		
 		}
 		
-		result = s6*cos( -pt1_dot_r - pt2_dot_r - pt2_dot_u2 + pt2_dot_u1 ) + 1.0/SQR(Nc)*nc_suppress;
+		//result = s6*cos( -pt1_dot_r - pt2_dot_r - pt2_dot_u2 + pt2_dot_u1 ) + nc_suppress;
+		result = s6;
 		
 		// Remove non-Nc-supressed DPS contribution
 		//if (u1 > 1.0/cutoff and u2>1.0/cutoff)
 		if (!isnan(quadrupole) and !isinf(quadrupole))
 		{
 			result -= s_r*s_r*s_r_m_u1_p_u2 
-				* std::cos(-pt1_dot_r - pt2_dot_r + pt2_dot_u1 - pt2_dot_u2 )
 				* step(u1-1.0/IR_CUTOFF)* step(u2-1.0/IR_CUTOFF);	// \theta(u1-1/CUTOFF)\tehta(u2-1/CUTOFF)			
 		}
 		// Subtract this here in order to force the integrand to vanish in UV,
 		// contribution calculated/compensated analytically in xs.cpp
-		result -= s_r*s_u1*s_u2*std::cos(-pt1_dot_r - pt2_dot_r - pt2_dot_u2 + pt2_dot_u1);
+		double subtract_coeff = 1.0;
+		if (finite_nc)
+			subtract_coeff = 1.0 - 1.0/SQR(Nc);
+		result -= subtract_coeff * s_r*s_u1*s_u2;
+		result*=std::cos(-pt1_dot_r - pt2_dot_r - pt2_dot_u2 + pt2_dot_u1);
 		
-		
+		// add nc-suppressed contribution
+		result += nc_suppress;
     
     }
 
@@ -534,7 +541,7 @@ void pVegas_wrapper(double x[6], double f[1], void* par)
 
 void CrossSection2::SetMCIntPoints(unsigned long long points)
 {
-    mcintpoints=points;
+    mcintpoints=points; mcintpoints_orig = points;
 }
 
 

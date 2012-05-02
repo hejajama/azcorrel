@@ -5,6 +5,7 @@
 #include <tools/tools.hpp>
 #include <amplitudelib/amplitudelib.hpp>
 #include <fragmentation/kkp.hpp>
+#include <fragmentation/dss.hpp>
 #include <iostream>
 #include <cmath>
 #include <gsl/gsl_errno.h>
@@ -195,7 +196,7 @@ int main(int argc, char* argv[])
     
 
     AmplitudeLib amplitude(amplitude_filename);
-    KKP fragmentation;
+    DSS fragmentation;
 
     CrossSection2 cross_section(&amplitude, pdf, &fragmentation);
     cross_section.SetMCIntPoints(mcintpoints);
@@ -224,13 +225,15 @@ int main(int argc, char* argv[])
     std::stringstream infostr;
 
     if (multiply_pdf)
+    {
         infostr << "# Parton distribution function used: " << pdf->GetString() << endl;
+        infostr << "# Fragfun: " << fragmentation.GetString() << endl;
+    }
     else
         infostr <<"# Not multiplying by PDF" << endl;
     if (deuteron) infostr << "# Probe is deuteron" << endl;
     else infostr <<"# Probe is proton" << endl;
     infostr <<"# Quark mass: " << cross_section.M_Q() << " GeV" << endl;
-
     infostr << "# pt1=" << pt1 <<", pt2=" << pt2 <<", y1=" << y1 <<", y2=" << y2 <<
     " y_A=" << ya << endl;
     infostr << "# x1=" << pt1*std::exp(y1)/sqrts << ", x2=" << pt2*std::exp(y2)/sqrts
@@ -250,7 +253,8 @@ int main(int argc, char* argv[])
 
     #ifdef USE_MPI
     }
-    #endif
+    #endif    
+    
     if (ya<0)
     {
         cerr << "Negative rapidity " << ya << endl;

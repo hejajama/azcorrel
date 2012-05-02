@@ -124,10 +124,8 @@ double CrossSection2::dSigma(double pt1, double pt2, double y1, double y2, doubl
     // m=0
     if (M_Q() < 1e-5 )
     {
-        //cout << "g: " << g << " f " << f << " kzdelta " << kzdeltasqr << " delta " << delta << " dotprod " << pt1*pt2*std::cos(phi) << " z " << tmpz << endl;
         result = SQR(g) + 1.0/kzdeltasqr + 2.0*g*( (1.0-tmpz)*pt1*pt2*std::cos(phi)
                     - tmpz*SQR(pt2) ) / ( pt2*kzdeltasqr );
-     //   cout <<"wo prefactor " << result << endl;
         result *= 2.0*(1.0+SQR(1.0-tmpz) );
     }
     else // m!= 0
@@ -141,16 +139,8 @@ double CrossSection2::dSigma(double pt1, double pt2, double y1, double y2, doubl
         result *= 2.0;
     }
 
-
-        /*result = 2.0*(1.0+SQR(1.0-tmpz))*(
-            SQR(g) + kzdeltasqr/SQR(kzdeltasqr + SQR(M_Q()*tmpz))
-                + 2.0*g*( (1.0-tmpz)*pt1*pt2*std::cos(phi) - tmpz*SQR(pt2) )
-                    / (pt2* ( kzdeltasqr + SQR(M_Q()*tmpz) ) )
-            )
-            + 2.0*SQR( H(pt2, tmpxa, tmpz) - M_Q()*SQR(tmpz)/(kzdeltasqr + SQR(M_Q()*tmpz)) );
-        */
-
     result *= f;
+
     //#pragma omp critical
     //cout << "# phi=" << phi << ", result w.o. corrections = " << result << endl;
     
@@ -160,10 +150,18 @@ double CrossSection2::dSigma(double pt1, double pt2, double y1, double y2, doubl
 		nc_suppress += 2.0*WavefSqr_k(pt1, kappa, (1.0-tmpz)*SQR(pt1) - tmpz*pt1*pt2*std::cos(phi), tmpz); // 2\psi(k)\psi(\kappa)^*
 		nc_suppress -= WavefSqr_k(kappa, kappa, kappa*kappa, tmpz);	// -\psi(\kappa)\psi^*(\kappa)
 		//nc_suppress -= WavefSqr_k(pt1, pt1, pt1*pt1, tmpz);			// -\psi(k)\psi^*(k), numerically as contains DPS contribution
-		nc_suppress *= 1.0/SQR(Nc);
 		nc_suppress *= f;
+		
+		// In finite-Nc case we subtract a bit less than the Marque's result,
+		// compensate it here (subtract, as we add Marquet's result later 
+		// = add too much.
+		if (M_Q()<1e-5)
+			nc_suppress -=  2.0*(1.0+SQR(1.0-tmpz) ) * SQR(g)  * f;
+		else
+			nc_suppress -=  2.0*((1.0+SQR(1.0-tmpz))*SQR(g) + SQR(h) ) * f;
+		nc_suppress *= 1.0/SQR(Nc);
 	}
-	nc_suppress=0;///DEBUG
+	//nc_suppress=0;///DEBUG
 
     // CorrectionTerm returns -1 if the integral doesn't converge
     double correction=0;
@@ -582,12 +580,14 @@ double CrossSection2::dSigma_integrated(double minpt1, double minpt2, double min
     helper.sqrts=sqrts;
 
     std::vector<double> yvals;
-    yvals.push_back(2.4);
+    //yvals.push_back(2.4);
     //yvals.push_back(2.8);
     //yvals.push_back(3.2);
     //yvals.push_back(3.6);
     //yvals.push_back(4);
-    maxy=yvals[yvals.size()-1]; miny=yvals[0];
+    yvals.push_back(3);
+    yvals.push_back(3.4);
+    yvals.push_back(3.8);
     helper.miny=miny; helper.maxy=maxy;
     
 
@@ -618,7 +618,7 @@ double CrossSection2::dSigma_integrated(double minpt1, double minpt2, double min
             
             gsl_integration_workspace *workspace 
              = gsl_integration_workspace_alloc(PTINT_INTERVALS_CP);
-            int status = gsl_integration_qag(&fun, minpt1, maxpt,
+            int status = gsl_integration_qag(&fun, 1.1, 1.6,
                     0, PTINT_ACCURACY_CP, PTINT_INTERVALS_CP, GSL_INTEG_GAUSS15, workspace,
                     &intresult, &abserr);
             gsl_integration_workspace_free(workspace);
@@ -630,29 +630,38 @@ double CrossSection2::dSigma_integrated(double minpt1, double minpt2, double min
                     << " relerr " << std::abs(abserr/intresult) << " phi: " << phi << "\n";
             }
 
-            /*if (y2ind==1) y2intres += 4.0*intresult;
-            else y2intres += intresult;
-            */
-            /*if (y2ind==1 or y2ind == 3) y2intres += 4.0*intresult;
-            else if (y2ind==2) y2intres += 2.0*intresult;
-            else y2intres += intresult;*/
-            y2intres +=intresult;
+			if (yvals.size()==3)
+			{
+				if (y2ind==1) y2intres += 4.0*intresult;
+				else y2intres += intresult;
+			}
+			else if (yvals.size()==5)
+			{
+				if (y2ind==1 or y2ind == 3) y2intres += 4.0*intresult;
+				else if (y2ind==2) y2intres += 2.0*intresult;
+				else y2intres += intresult;
+			}
+			else
+				cerr << "Unknown amount of yvals at "<< LINEINFO << endl;
         }
-        //y2intres *= (maxy-miny)/6.0;
-        /*if (y1ind==1) result += 4.0*y2intres;
-        else result += y2intres;
-        */
-        
-        /*y2intres *= (maxy-miny)/12.0;
-        if (y1ind==1 or y1ind==3) result += 4.0*y2intres;
-        else if (y1ind==2) result += 2.0*y2intres;
-        else result += y2intres;
-        */
-        result += y2intres;
-        
+        if (yvals.size()==3)
+        {
+			y2intres *= (maxy-miny)/6.0;
+			if (y1ind==1) result += 4.0*y2intres;
+			else result += y2intres;
+        }
+        else if (yvals.size()==5)
+        {
+			y2intres *= (maxy-miny)/12.0;
+			if (y1ind==1 or y1ind==3) result += 4.0*y2intres;
+			else if (y1ind==2) result += 2.0*y2intres;
+			else result += y2intres;
+		}
     }
-    //result *= (maxy-miny)/6.0;
-    //result *= (maxy-miny)/12.0;
+    if (yvals.size()==3)
+		result *= (maxy-miny)/6.0;
+	else if (yvals.size()==5)
+		result *= (maxy-miny)/12.0;
     
     return result*2.0*M_PI; //2pi from one angular integral
 }
@@ -720,7 +729,7 @@ double Inthelperf_cp_pt1(double pt1, void* p)
     double result,abserr;
     gsl_integration_workspace *workspace 
      = gsl_integration_workspace_alloc(PTINT_INTERVALS_CP);
-    int status = gsl_integration_qag(&fun, par->minpt2, pt1,
+    int status = gsl_integration_qag(&fun,0.5, 0.75,
             0, PTINT_ACCURACY_CP, PTINT_INTERVALS_CP, GSL_INTEG_GAUSS15, workspace,
             &result, &abserr);
     gsl_integration_workspace_free(workspace);
@@ -870,9 +879,9 @@ CrossSection2::CrossSection2(AmplitudeLib* N_, PDF* pdf_,FragmentationFunction* 
     ptinterpolator2d_correction = NULL;
     ptinterpolator2d_rev_correction = NULL;
 
-	double maxpt=6, ptstep=0.25;
+	double minpt=0.5, maxpt=6, ptstep=0.5;
     //for (double pt = 1; pt<=9.5; pt+=0.5)
-    for (double pt=1; pt<=maxpt; pt+=ptstep)
+    for (double pt=minpt; pt<=maxpt; pt+=ptstep)
     {
         ptvals.push_back(pt);
         std::stringstream s; s << pt;
@@ -886,17 +895,16 @@ CrossSection2::CrossSection2(AmplitudeLib* N_, PDF* pdf_,FragmentationFunction* 
         
      //std::string fileprefix = "rhic_pp/";
     //string fileprefix = "rhic_central_025/";
-    //string fileprefix = "finite_vs_large/";
-    fileprefix = "marquet/";
+    //fileprefix = "phenix/mv1/largenc/";
+    fileprefix = "marquet_phenix/";
     fileprefix_cor = "rhic_korjaus_central/";
-	postfix = "_largenc";
+	postfix = "";//"_largenc";
 	#ifdef USE_MPI
 	int id;
 	MPI_Comm_rank(MPI_COMM_WORLD, &id);
 	if (id==0)
 	#endif
-		    cout << "# Loading data from " << fileprefix << " postfix " << postfix << " up to " << maxpt << " ptstep " << ptstep << endl;
-	
+		    cout << "# Loading data from " << fileprefix << " postfix " << postfix << " minpt " << minpt << " maxpt " << maxpt << " ptstep " << ptstep << endl;	
 }
 
 
@@ -1061,7 +1069,7 @@ int CrossSection2::LoadPtData(double y1, double y2)
        for (int pt2ind=0; pt2ind<points; pt2ind++)
        {
             std::stringstream fname, fname_rev, fname_cor, fname_rev_cor;
-           /*fname << fileprefix << "pt1_" << ptstrings[pt1ind] << "_pt2_"
+            /*fname << fileprefix << "pt1_" << ptstrings[pt1ind] << "_pt2_"
                 << ptstrings[pt2ind] << "_y1_" << y1str << "_y2_" << y2str << postfix;
             fname_rev << fileprefix << "pt1_" << ptstrings[pt1ind] << "_pt2_"
                 << ptstrings[pt2ind] << "_y1_" << y2str << "_y2_" << y1str << postfix;
