@@ -7,3 +7,4 @@
  */
 
 #define USE_MPI
+//#define USE_FFTW

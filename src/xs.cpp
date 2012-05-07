@@ -558,6 +558,8 @@ double dSigma_full_helperf_z2(double z2, void* p)
 /*
  * Integrate dSigma_full = dN/d^2 p_1 d^2 p_2 dy_1 dy_2 over
  * pt_1, pt_2, y_1, y_2 and one angle => get dN/d\phi
+ * 
+ * TODO: pt and y ranges are hardcoded, parameters are ignored!!
  */
 double Inthelperf_cp_pt1(double pt1, void* p);
 double Inthelperf_cp_pt2(double pt2, void* p);
@@ -588,6 +590,9 @@ double CrossSection2::dSigma_integrated(double minpt1, double minpt2, double min
     yvals.push_back(3);
     yvals.push_back(3.4);
     yvals.push_back(3.8);
+    
+    miny=yvals[0];
+    maxy=yvals[yvals.size()-1];
     helper.miny=miny; helper.maxy=maxy;
     
 

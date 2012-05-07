@@ -6,6 +6,16 @@
  * we first fill a 4-dimensional array and then FT it.
  */
 
+#include "config.hpp"
+#ifndef USE_MPI
+	void CrossSection2::CalculateCorrection_fft(double ya, double z)
+		{ return; }
+	double CrossSection2::CorrectionTerm_fft(double pt1, double pt2,
+    double ya, double phi)
+		{ return 0; }
+#else
+	
+
 #include <complex>
 #include <fftw3.h>
 #include <gsl/gsl_integration.h>
@@ -535,3 +545,5 @@ double Inthelperf_v2thetaint(double theta, void* p)
     return result;
 
 }
+
+#endif //ifdef USE_MPI
