@@ -646,6 +646,8 @@ double CrossSection2::dSigma_integrated(double minpt1, double minpt2, double min
 				else if (y2ind==2) y2intres += 2.0*intresult;
 				else y2intres += intresult;
 			}
+			else if (yvals.size()==1)
+				y2intres += intresult;
 			else
 				cerr << "Unknown amount of yvals at "<< LINEINFO << endl;
         }
@@ -662,6 +664,8 @@ double CrossSection2::dSigma_integrated(double minpt1, double minpt2, double min
 			else if (y1ind==2) result += 2.0*y2intres;
 			else result += y2intres;
 		}
+		else if (yvals.size()==1)
+			result += y2intres;
     }
     if (yvals.size()==3)
 		result *= (maxy-miny)/6.0;
@@ -884,7 +888,7 @@ CrossSection2::CrossSection2(AmplitudeLib* N_, PDF* pdf_,FragmentationFunction* 
     ptinterpolator2d_correction = NULL;
     ptinterpolator2d_rev_correction = NULL;
 
-	double minpt=0.5, maxpt=6, ptstep=0.5;
+	double minpt=0.5, maxpt=4, ptstep=0.5;
     //for (double pt = 1; pt<=9.5; pt+=0.5)
     for (double pt=minpt; pt<=maxpt; pt+=ptstep)
     {
@@ -902,7 +906,9 @@ CrossSection2::CrossSection2(AmplitudeLib* N_, PDF* pdf_,FragmentationFunction* 
     //string fileprefix = "rhic_central_025/";
     //fileprefix = "phenix/mv1/largenc/";
     fileprefix = "marquet_phenix/";
+    //fileprefix = "final_result/ircutoff_lambdaqcd/mvgamma/largenc/";
     fileprefix_cor = "rhic_korjaus_central/";
+    
 	postfix = "";//"_largenc";
 	#ifdef USE_MPI
 	int id;

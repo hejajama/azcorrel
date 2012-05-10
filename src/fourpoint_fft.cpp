@@ -7,7 +7,8 @@
  */
 
 #include "config.hpp"
-#ifndef USE_MPI
+#ifndef USE_FFTW
+	#include "xs.hpp"
 	void CrossSection2::CalculateCorrection_fft(double ya, double z)
 		{ return; }
 	double CrossSection2::CorrectionTerm_fft(double pt1, double pt2,

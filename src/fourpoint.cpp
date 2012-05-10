@@ -169,10 +169,7 @@ double CrossSection2::CorrectionTerm(double pt1, double pt2, double ya, double p
 
 
 
-    /// MPI & PVEGAS
-    if (mcintpoints > 2*mcintpoints_orig)
-		mcintpoints /= 2;
-	
+    /// MPI & PVEGAS	
 	
     
     #ifdef USE_MPI
@@ -198,7 +195,6 @@ double CrossSection2::CorrectionTerm(double pt1, double pt2, double ya, double p
     reg[dim+3]=2.0*M_PI; reg[dim+4]=2.0*M_PI; reg[dim+5]=2.0*M_PI;
 
     time_t t;
-    vegasint:	// We return to this (using goto) if integral doesn't converge
     time(&t);
     
     // set up the grid (init = 0) with 5 iterations of 1000 samples,
@@ -234,7 +230,7 @@ double CrossSection2::CorrectionTerm(double pt1, double pt2, double ya, double p
     if (id==0)
     {
       cout << "# phi=" << phi << " result: " << estim[0] << " +/- " << std_dev[0]
-        << " relerr " << std::abs(std_dev[0]/estim[0]) << " time "
+        << " effect " << estim[0]*constants << " +/- " << std_dev[0]*constants << " relerr " << std::abs(std_dev[0]/estim[0]) << " time "
        << (std::time(NULL)-start)/60.0/60.0 << " h"<< endl;
 	}
     if (std::abs(std_dev[0]/estim[0]) > 0.07)
@@ -246,12 +242,9 @@ double CrossSection2::CorrectionTerm(double pt1, double pt2, double ya, double p
             cout <<"# INTEGRAL DOESN'T CONVERGE! phi=" << phi
                 << " result: " << estim[0] << " +/- " << std_dev[0]
                 << " relerr " << std::abs(std_dev[0]/estim[0]) << " pt1 " << pt1 << " pt2 "
-                << pt2 << " z " << z << " increasing mcintpoints from " << mcintpoints << " to " << mcintpoints*3 << endl;
+                << pt2 << " z " << z << endl;//" increasing mcintpoints from " << mcintpoints << " to " << mcintpoints*3 << endl;
 		}
 		return -100;
-		if (mcintpoints > 128*mcintpoints_orig)
-			return -100; 
-		goto vegasint;
     }
 
     
@@ -393,8 +386,17 @@ double Inthelperf_correction(double* vec, size_t dim, void* p)
 					* std::exp(-Nc/4.0 * sqrt_fdelta) 
 				)
 				* std::exp( -Nc/4.0*f_b1x2x1b2 + 1.0/(2.0*Nc)*f_b1x1x2b2);
-			if (isnan(quadrupole) or isinf(quadrupole)) { s6=0; }
-			else s6 = s_r * quadrupole;
+			
+			if (isinf(quadrupole))
+				cerr << "Inf quadrupole, r " << r << " u1 " << u1 << " u2 " << u2 << endl;
+			if (isnan(quadrupole)) 
+			{ 
+				if (s_r > 0 and r > 10*u1 and r>10*u2)
+					quadrupole = s_u1*s_u2;
+				else
+					quadrupole = 0;
+			}
+			s6 = s_r * quadrupole;
 		}
 		else
 		{
@@ -404,6 +406,7 @@ double Inthelperf_correction(double* vec, size_t dim, void* p)
 			double loglog=0;     
 			loglog = std::log(f1) / std::log(f2);
 			// If u1,u2>>r loglog->1
+			// (but this is a DPS contribution and removed later)
 			if (s_u1==0 and s_u2==0 and s_r>0 )
 				loglog=1;
 			// All other NaN limits vanish
