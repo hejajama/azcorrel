@@ -238,7 +238,7 @@ int main(int argc, char* argv[])
     " y_A=" << ya << endl;
     infostr << "# x1=" << pt1*std::exp(y1)/sqrts << ", x2=" << pt2*std::exp(y2)/sqrts
         << " sqrts=" << sqrts << endl;
-    infostr << "# z=" << cross_section.Z(pt1,pt2,y1,y2) <<", 1-z=" << 1.0-cross_section.Z(pt2,pt1,y2,y1)
+    infostr << "# z=" << cross_section.Z(pt1,pt2,y1,y2) <<", 1-z=" << 1.0-cross_section.Z(pt1,pt2,y1,y2)
         << " xa=" << cross_section.xa(pt1,pt2,y1,y2,sqrts)
         << " xh=" << cross_section.xh(pt1,pt2,y1,y2,sqrts)  
         << " x_0=" << amplitude.X0() << endl;

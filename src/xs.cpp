@@ -16,6 +16,7 @@
 #include <fstream>
 #include <string>
 #include <sstream>
+#include <algorithm>
 
 #ifdef USE_MPI
     #include <mpi.h>
@@ -84,31 +85,15 @@ double CrossSection2::dSigma(double pt1, double pt2, double y1, double y2, doubl
     double ya = std::log(N->X0()/tmpxa);
     if (ya<0)
         cerr << "Negative rapidity interval at " << LINEINFO << endl;
-    //ya=0;   /////TODO!!!!!!!!!!! DEBUG!!!!!!!
+    //ya=0;  tmpxa=N->X0(); /////TODO!!!!!!!!!!! DEBUG!!!!!!!
     if (!N->InterpolatorInitialized(ya))
         N->InitializeInterpolation(ya);
     double delta = Delta(pt1,pt2,phi);
 
     double g=0,f=0,h=0;
-    /*
-    #pragma omp parallel sections
-    {
-        #pragma omp section
-        {
-            g = G(pt2, tmpxa, tmpz);
-        }
-        #pragma omp section
-        {
-            if (std::abs(delta - fcachek) < 0.01) f=fcacheval;
-            else
-            {
-                f = N->S_k(delta, ya)/SQR(2.0*M_PI);
-                fcachek=delta; fcacheval=f;
-            }
-        }
-    }
-    */
+ 
     f=N->S_k(delta, ya)/SQR(2.0*M_PI);
+
     if (f<0)
     {
         cerr << "f=" << f << " at phi=" << phi << endl;
@@ -140,7 +125,7 @@ double CrossSection2::dSigma(double pt1, double pt2, double y1, double y2, doubl
     }
 
     result *= f;
-
+    
     //#pragma omp critical
     //cout << "# phi=" << phi << ", result w.o. corrections = " << result << endl;
     
@@ -373,7 +358,6 @@ const int ZINT_INTERVALS=3;
 double CrossSection2::dSigma_full(double pt1, double pt2, double y1, double y2,
     double phi, double sqrts, bool deuteron)
 {
-
     double x1 = pt1*std::exp(y1)/sqrts;
     double x2 = pt2*std::exp(y2)/sqrts;
 
@@ -477,15 +461,10 @@ double dSigma_full_helperf_z2(double z2, void* p)
     // Interpolators give parton level cross section which is not multiplied by (1-z)
     // Evaluate(gluon momentum, quark momentum)
     result =
-        (par->pt_interpolator->Evaluate(par->pt1/par->z1, par->pt2/z2)
-        //+ 0 * par->pt_interpolator_cor->Evaluate(par->pt1/par->z1, par->pt2/z2)
-        )
+        (par->pt_interpolator->Evaluate(par->pt1/par->z1, par->pt2/z2)  )
         * (1.0 - par->xs->Z(par->pt1/par->z1, par->pt2/z2, par->y1, par->y2));
       
-    /*double result2 = par->xs->dSigma(par->pt1/par->z1, par->pt2/z2, par->y1, par->y2, par->phi,
-            par->sqrts, false)
-            *(1.0 - par->xs->Z(par->pt1/par->z1, par->pt2/z2, par->y1, par->y2)) ; 
-    */
+
     double xf_frag1 = 
           xf_u
             * frag_u_pi0_z2
@@ -507,7 +486,6 @@ double dSigma_full_helperf_z2(double z2, void* p)
             *  frag_g_pi0_z1;
     }
     result *= xf_frag1;
-    //result2 *= xf_frag1;
 
 
     // exchange pt1<->pt2
@@ -529,29 +507,10 @@ double dSigma_full_helperf_z2(double z2, void* p)
             *  frag_d_pi0_z1
             *  frag_g_pi0_z2;
     }
-    result += (par->pt_interpolator_rev->Evaluate(par->pt2/z2, par->pt1/par->z1)
-            //+ 0 *par->pt_interpolator_rev_cor->Evaluate(par->pt2/z2, par->pt1/par->z1)
-            )
+    result += (par->pt_interpolator_rev->Evaluate(par->pt2/z2, par->pt1/par->z1)  )
         * (1.0 - par->xs->Z(par->pt2/z2, par->pt1/par->z1, par->y2, par->y1))   
         * xf_frag2;
-    /*
-    result2 += par->xs->dSigma(par->pt2/z2, par->pt1/par->z1, par->y2, par->y1, par->phi,
-            par->sqrts, false)
-            *(1.0 - par->xs->Z(par->pt2/z2, par->pt1/par->z1, par->y2, par->y1))
-            * xf_frag2 ; 
-    */
-    /*
-
-   /*cerr << "pt1/z1 " << par->pt1/par->z1 << " pt2/z2 " << par->pt2/z2 << " amp1 "
-    << par->pt_interpolator->Evaluate(par->pt1/par->z1, par->pt2/z2)
-        << " amp2 " << par->pt_interpolator->Evaluate(par->pt2/z2, par->pt1/par->z1) << endl;
-
-    */
-/*
-    if (std::abs(result-result2)/result > 0.1 or std::abs(result-result2)/result2 > 0.1)
-        cerr << "HUGE DIFFERENCE " << std::abs(result-result2)/result << " k: " << par->pt1/par->z1 << " q " << par->pt2/z2 << endl;
-    //cout << par->z1 << " " << z2 << " " << result/SQR(par->z1*z2) << endl;
-*/
+    
     return result/SQR(z2);
 }
 
@@ -587,9 +546,11 @@ double CrossSection2::dSigma_integrated(double minpt1, double minpt2, double min
     //yvals.push_back(3.2);
     //yvals.push_back(3.6);
     //yvals.push_back(4);
-    yvals.push_back(3);
+    //yvals.push_back(3);
     yvals.push_back(3.4);
-    yvals.push_back(3.8);
+    //yvals.push_back(4);
+    //yvals.push_back(3.8);
+    
     
     miny=yvals[0];
     maxy=yvals[yvals.size()-1];
@@ -620,14 +581,15 @@ double CrossSection2::dSigma_integrated(double minpt1, double minpt2, double min
             LoadPtData(helper.y1, helper.y2);
             Prepare2DInterpolators(phi);
             double intresult,abserr;
-            
+			double minpt=1.6, maxpt=2;
+                       
             gsl_integration_workspace *workspace 
              = gsl_integration_workspace_alloc(PTINT_INTERVALS_CP);
-            int status = gsl_integration_qag(&fun, 1.1, 1.6,
+            int status = gsl_integration_qag(&fun, minpt, maxpt,
                     0, PTINT_ACCURACY_CP, PTINT_INTERVALS_CP, GSL_INTEG_GAUSS15, workspace,
                     &intresult, &abserr);
             gsl_integration_workspace_free(workspace);
-            cout << "# " << phi << " y1 " << y1 << " y2 " << y2 << " res " << intresult << "\n";
+            cout << "# " << phi << " y1 " << y1 << " y2 " << y2 << " pt1range " << minpt << " - " << maxpt << " res " << intresult << "\n";
             cout.flush();
             if (status)
             {
@@ -738,7 +700,7 @@ double Inthelperf_cp_pt1(double pt1, void* p)
     double result,abserr;
     gsl_integration_workspace *workspace 
      = gsl_integration_workspace_alloc(PTINT_INTERVALS_CP);
-    int status = gsl_integration_qag(&fun,0.5, 0.75,
+    int status = gsl_integration_qag(&fun, 0.5, 0.75,
             0, PTINT_ACCURACY_CP, PTINT_INTERVALS_CP, GSL_INTEG_GAUSS15, workspace,
             &result, &abserr);
     gsl_integration_workspace_free(workspace);
@@ -769,21 +731,36 @@ double Inthelperf_cp_pt2(double pt2, void* p)
  */
 struct G_helper { double y; AmplitudeLib* N; double kt; double z; CrossSection2 *xs; };
 double G_helperf(double r, void* p);
+double G_helperf_gsl(double r, void* p);
 double CrossSection2::G(double kt, double x, double z)
 {
-    if ( std::abs(kt - gcachek) < 0.001 and std::abs(x/gcachex-1.0) < 0.001 and std::abs(z-gcachez) < 0.001)
+    if ( std::abs(kt - gcachek) < 0.0001 and std::abs(x/gcachex-1.0) < 0.0001 and std::abs(z-gcachez) < 0.0001)
         return gcacheval;
     
     G_helper helper;
-    helper.y = std::log(N->X0()/x);
+    helper.y = std::log(N->X0()/x); 
     helper.N=N; helper.kt=kt; helper.z=z; helper.xs=this;
 
     set_fpu_state();
     init_workspace_fourier(FOURIER_ZEROS);   // number of bessel zeroes, max 2000
-
     double result = fourier_j1(std::abs(kt), G_helperf, &helper);
     gcachek=kt; gcachex = x; gcachez = z;
     gcacheval=result;
+    
+    
+    ///DEBUG: GSL
+    /*
+    gsl_function fun; fun.function=G_helperf_gsl; fun.params=&helper;
+    gsl_integration_workspace *workspace 
+     = gsl_integration_workspace_alloc(100);
+     double gslresult,abserr;
+    int status = gsl_integration_qag(&fun, 0, 9999,
+            0, 0.001, 100, GSL_INTEG_GAUSS51, workspace,
+            &gslresult, &abserr);
+    gsl_integration_workspace_free(workspace);
+    
+    cout << "fourierj1intres " << result << " gslresult " << gslresult << endl;
+    */
     return result;
 
 }
@@ -813,6 +790,11 @@ double G_helperf(double r, void *p)
     return M_Q*par->z*result;
 }
 
+double G_helperf_gsl(double r, void* p)
+{
+	G_helper* par = (G_helper*) p;
+	return gsl_sf_bessel_J1(par->kt*r)*G_helperf(r, p);
+}
 
 /*
  * Funktion H_{x_A} = m*z^2*\int dr r S(r) K_0(mzr)J_0(kr)
@@ -888,8 +870,7 @@ CrossSection2::CrossSection2(AmplitudeLib* N_, PDF* pdf_,FragmentationFunction* 
     ptinterpolator2d_correction = NULL;
     ptinterpolator2d_rev_correction = NULL;
 
-	double minpt=0.5, maxpt=4, ptstep=0.5;
-    //for (double pt = 1; pt<=9.5; pt+=0.5)
+	double minpt=0.5, maxpt=6.0, ptstep=0.25;
     for (double pt=minpt; pt<=maxpt; pt+=ptstep)
     {
         ptvals.push_back(pt);
@@ -905,8 +886,10 @@ CrossSection2::CrossSection2(AmplitudeLib* N_, PDF* pdf_,FragmentationFunction* 
      //std::string fileprefix = "rhic_pp/";
     //string fileprefix = "rhic_central_025/";
     //fileprefix = "phenix/mv1/largenc/";
-    fileprefix = "marquet_phenix/";
-    //fileprefix = "final_result/ircutoff_lambdaqcd/mvgamma/largenc/";
+    //fileprefix = "marquet_qs015/";
+    //fileprefix = "final_result/ircutoff_lambdaqcd/mvgamma_qs033/largenc/";
+    fileprefix = "final_result/ircutoff_lambdaqcd/mv1_qs06/naive/";
+    //fileprefix="marquet_qs015/";
     fileprefix_cor = "rhic_korjaus_central/";
     
 	postfix = "";//"_largenc";
@@ -1129,6 +1112,8 @@ int CrossSection2::LoadPtData(double y1, double y2)
                     dphi.push_back(StrToReal(angle));
                 }
             }
+            // Subtract DPS contribution completely
+			//SubtractMinimum(xs);
             while (!file_rev.eof())
             {
                 string line;
@@ -1140,10 +1125,12 @@ int CrossSection2::LoadPtData(double y1, double y2)
                     iss >> angle; iss >> val;
                     xs_rev.push_back(StrToReal(val));
                     dphi_rev.push_back(StrToReal(angle));
-                }
+                }                
             }
+            //SubtractMinimum(xs_rev);
             if (apply_corrections)
             {
+				cout << "# Applying corerctions, are you sure!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!" << endl;
                 std::ifstream file_cor(fname_cor.str().c_str());
                 std::ifstream file_rev_cor(fname_rev_cor.str().c_str());
                 
