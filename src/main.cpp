@@ -246,6 +246,12 @@ int main(int argc, char* argv[])
     infostr << "# MC Integration points " << mcintpoints << " / supported: "
         << std::numeric_limits<unsigned long long>::max() << endl;
     infostr << "# Max pt when loading data: " << cross_section.MaxPt() << endl;
+    
+    if (cross_section.xh(pt1,pt2,y1,y2,sqrts)  and mode==MODE_DSIGMA)
+    {
+		cerr << "Kinematically forbidden parton level process!" << endl;
+		cout << "Kinematically forbidden parton level process!" << endl;
+	}
 
     cout << infostr.str();
     if (output_file!="")

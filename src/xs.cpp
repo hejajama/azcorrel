@@ -82,6 +82,10 @@ double CrossSection2::dSigma(double pt1, double pt2, double y1, double y2, doubl
     double result=0;
     double tmpz = Z(pt1, pt2, y1, y2);
     double tmpxa = xa(pt1, pt2, y1, y2, sqrts);
+    if (xh(pt1, pt2, y1, y2, sqrts)>1)
+	{
+		return 0;
+	}
     double ya = std::log(N->X0()/tmpxa);
     if (ya<0)
         cerr << "Negative rapidity interval at " << LINEINFO << endl;
@@ -581,7 +585,7 @@ double CrossSection2::dSigma_integrated(double minpt1, double minpt2, double min
             LoadPtData(helper.y1, helper.y2);
             Prepare2DInterpolators(phi);
             double intresult,abserr;
-			double minpt=1.6, maxpt=2;
+			double minpt=1.1, maxpt=1.6;
                        
             gsl_integration_workspace *workspace 
              = gsl_integration_workspace_alloc(PTINT_INTERVALS_CP);

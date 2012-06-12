@@ -81,7 +81,7 @@ double CrossSection2::CorrectionTerm(double pt1, double pt2, double ya, double p
     // pt1=k, pt2=q
 
     N->SetOutOfRangeErrors(false);
-    double minr=std::log(0.001); double maxr=std::log(100);
+    double minr=std::log(0.0001); double maxr=std::log(40);
     //double minr=0; double maxr=100;
 
        
