@@ -82,7 +82,7 @@ double CrossSection2::dSigma(double pt1, double pt2, double y1, double y2, doubl
     double result=0;
     double tmpz = Z(pt1, pt2, y1, y2);
     double tmpxa = xa(pt1, pt2, y1, y2, sqrts);
-    if (xh(pt1, pt2, y1, y2, sqrts)>1)
+    if (xh(pt1, pt2, y1, y2, sqrts)>1)	// Kinematically forbidden, dont waste time
 	{
 		return 0;
 	}
