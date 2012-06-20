@@ -262,13 +262,22 @@ int main(int argc, char* argv[])
     
     if (ya<0)
     {
-        cerr << "Negative rapidity " << ya << endl;
-        return -1;
+        cerr << "Negative rapidity " << ya << " at " << LINEINFO << endl;
+       // return -1;
     }   
     bool fftw=false;
-
     
-      amplitude.InitializeInterpolation(ya);
+    ///DEBUG
+    /*
+    for (double p=1e-5; p<50; p*=1.05)
+    {
+		amplitude.InitializeInterpolation(y1);
+		cout << p << " " << cross_section.G(p, amplitude.X0()*std::exp(-y1), 0.5) << endl;
+	}
+	return 0;
+*/
+    
+    amplitude.InitializeInterpolation(ya);
     double normalization = 1;//cross_section.Sigma(pt1, pt2, y1, y2, sqrts);
     if (phi>-0.5) points=1;    // calculate only given angle
 

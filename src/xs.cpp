@@ -735,15 +735,32 @@ double Inthelperf_cp_pt2(double pt2, void* p)
  */
 struct G_helper { double y; AmplitudeLib* N; double kt; double z; CrossSection2 *xs; };
 double G_helperf(double r, void* p);
-double G_helperf_gsl(double r, void* p);
+double G_helperf_smallpt(double r, void* p);
 double CrossSection2::G(double kt, double x, double z)
 {
-    if ( std::abs(kt - gcachek) < 0.0001 and std::abs(x/gcachex-1.0) < 0.0001 and std::abs(z-gcachez) < 0.0001)
-        return gcacheval;
+
     
     G_helper helper;
     helper.y = std::log(N->X0()/x); 
     helper.N=N; helper.kt=kt; helper.z=z; helper.xs=this;
+    
+    if (kt < 1e-3)
+    {
+		gsl_function fun; fun.function=G_helperf_smallpt; fun.params=&helper;
+		gsl_integration_workspace *workspace 
+		 = gsl_integration_workspace_alloc(10);
+		 double gslresult,abserr;
+		int status = gsl_integration_qag(&fun, N->MinR(), N->MaxR(),
+				0, 0.001, 10, GSL_INTEG_GAUSS51, workspace,
+				&gslresult, &abserr);
+		gsl_integration_workspace_free(workspace);
+    
+		return gslresult;
+		
+	}
+	
+	if ( std::abs(kt - gcachek) < 0.00001 and std::abs(x/gcachex-1.0) < 0.0001 and std::abs(z-gcachez) < 0.0001)
+        return gcacheval;
 
     set_fpu_state();
     init_workspace_fourier(FOURIER_ZEROS);   // number of bessel zeroes, max 2000
@@ -751,21 +768,11 @@ double CrossSection2::G(double kt, double x, double z)
     gcachek=kt; gcachex = x; gcachez = z;
     gcacheval=result;
     
+
     
-    ///DEBUG: GSL
-    /*
-    gsl_function fun; fun.function=G_helperf_gsl; fun.params=&helper;
-    gsl_integration_workspace *workspace 
-     = gsl_integration_workspace_alloc(100);
-     double gslresult,abserr;
-    int status = gsl_integration_qag(&fun, 0, 9999,
-            0, 0.001, 100, GSL_INTEG_GAUSS51, workspace,
-            &gslresult, &abserr);
-    gsl_integration_workspace_free(workspace);
-    
-    cout << "fourierj1intres " << result << " gslresult " << gslresult << endl;
-    */
     return result;
+    
+    
 
 }
 
@@ -794,10 +801,10 @@ double G_helperf(double r, void *p)
     return M_Q*par->z*result;
 }
 
-double G_helperf_gsl(double r, void* p)
+double G_helperf_smallpt(double r, void* p)
 {
 	G_helper* par = (G_helper*) p;
-	return gsl_sf_bessel_J1(par->kt*r)*G_helperf(r, p);
+	return par->kt*r/2.0*G_helperf(r, p);
 }
 
 /*

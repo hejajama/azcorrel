@@ -65,8 +65,6 @@ double CrossSection2::CorrectionTerm(double pt1, double pt2, double ya, double p
     cout << "# Starting MC integral, marquet: " << cyrille << ", correction: " << correction 
         << " finite-Nc " << FiniteNc() << " ir-cutoff " << IR_CUTOFF << " GeV " << endl;
     
-    
-    
 
 
     if (!N->InterpolatorInitialized(ya))
