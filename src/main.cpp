@@ -196,7 +196,7 @@ int main(int argc, char* argv[])
     
 
     AmplitudeLib amplitude(amplitude_filename);
-    DSS fragmentation;
+    KKP fragmentation;
 
     CrossSection2 cross_section(&amplitude, pdf, &fragmentation);
     cross_section.SetMCIntPoints(mcintpoints);

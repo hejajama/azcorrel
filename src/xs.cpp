@@ -78,6 +78,10 @@ double CrossSection2::dSigma_lo(double pt1, double pt2, double y1, double y2, do
 double CrossSection2::dSigma(double pt1, double pt2, double y1, double y2, double phi,
     double sqrts, bool multiply_pdf)
 {
+	#ifdef USE_MPI
+	int id;
+	MPI_Comm_rank(MPI_COMM_WORLD, &id);
+	#endif
     //return dSigma_lo(pt1, pt2, y1,y2, phi, sqrts);
     double result=0;
     double tmpz = Z(pt1, pt2, y1, y2);
@@ -155,14 +159,33 @@ double CrossSection2::dSigma(double pt1, double pt2, double y1, double y2, doubl
     // CorrectionTerm returns -1 if the integral doesn't converge
     double correction=0;
     #ifdef USE_MPI
-		int id;
-		MPI_Comm_rank(MPI_COMM_WORLD, &id);
 		if (id==0)
 		    cout << "# uncorrected result " << result << " nc-suppressed " << nc_suppress << endl;
 	#endif
     correction = CorrectionTerm(pt1,pt2,ya,phi,tmpz);
     if (correction < -10)
-		return -1;
+    {
+		// Integral didn't converge
+		if (mcintpoints > mcintpoints_orig * 3) // If # of intpoints is already increased twise
+		{
+			#ifdef USE_MPI
+			if (id==0)
+			#endif
+			{
+			cout <<"# ERROR! Integral didn't converge even though we increased the number of mcintpoints. Quitting..." << endl;
+			}
+			return -1;	
+		}
+		mcintpoints*=3;
+		#ifdef USE_MPI
+		if (id==0)
+		#endif
+		{
+			
+			cout <<"# Integral didn't converge, increasing num. of intpoints by factor 3 to " << mcintpoints << endl;
+		}
+		return dSigma(pt1, pt2, y1, y2, phi, sqrts, multiply_pdf);
+	}
     // Nc-supprsesed terms analytically
 
     correction +=nc_suppress;  
@@ -398,7 +421,8 @@ double CrossSection2::dSigma_full(double pt1, double pt2, double y1, double y2,
         << " relerror " << std::abs(abserr/result) << " dphi " << phi << endl;
     */
 
-    result *= Alpha_s(SQR(std::max(pt1, pt2))) * Cf / (4.0*SQR(M_PI)); // NB! \int d^2b = S_T is dropped as it
+	double alphas=0.2; // Alpha_s(SQR(std::max(pt1, pt2))) 
+    result *=  Cf*alphas / (4.0*SQR(M_PI)); // NB! \int d^2b = S_T is dropped as it
     // should cancel, wouldn't work anymore if we calculated something b-dependent!!!!
 
     return result;
@@ -528,7 +552,7 @@ double Inthelperf_cp_pt1(double pt1, void* p);
 double Inthelperf_cp_pt2(double pt2, void* p);
 double Inthelperf_y1(double pt2, void* p);
 double Inthelperf_y2(double pt2, void* p);
-const int PTINT_INTERVALS_CP=2;
+const int PTINT_INTERVALS_CP=1;
 const int YINT_INTERVALS=1;
 const double PTINT_ACCURACY_CP=0.01;
 
@@ -550,10 +574,9 @@ double CrossSection2::dSigma_integrated(double minpt1, double minpt2, double min
     //yvals.push_back(3.2);
     //yvals.push_back(3.6);
     //yvals.push_back(4);
-    //yvals.push_back(3);
+    yvals.push_back(3);
     yvals.push_back(3.4);
-    //yvals.push_back(4);
-    //yvals.push_back(3.8);
+    yvals.push_back(3.8);
     
     
     miny=yvals[0];
@@ -585,7 +608,8 @@ double CrossSection2::dSigma_integrated(double minpt1, double minpt2, double min
             LoadPtData(helper.y1, helper.y2);
             Prepare2DInterpolators(phi);
             double intresult,abserr;
-			double minpt=1.1, maxpt=1.6;
+			//double minpt=2, maxpt=3.5;
+			double minpt=1.1; double maxpt=1.6;
                        
             gsl_integration_workspace *workspace 
              = gsl_integration_workspace_alloc(PTINT_INTERVALS_CP);
@@ -606,6 +630,11 @@ double CrossSection2::dSigma_integrated(double minpt1, double minpt2, double min
 				if (y2ind==1) y2intres += 4.0*intresult;
 				else y2intres += intresult;
 			}
+			else if (yvals.size()==4)
+			{
+				if (y2ind==1 or y2ind==2) y2intres += 3.0*intresult;
+				else y2intres += intresult;
+			}
 			else if (yvals.size()==5)
 			{
 				if (y2ind==1 or y2ind == 3) y2intres += 4.0*intresult;
@@ -623,6 +652,12 @@ double CrossSection2::dSigma_integrated(double minpt1, double minpt2, double min
 			if (y1ind==1) result += 4.0*y2intres;
 			else result += y2intres;
         }
+        else if (yvals.size()==4)
+        {
+			y2intres *= (maxy-miny)/8.0;
+			if (y1ind==1 or y1ind==2) result += 3.0*y2intres;
+			else result += y2intres;
+		}
         else if (yvals.size()==5)
         {
 			y2intres *= (maxy-miny)/12.0;
@@ -632,11 +667,15 @@ double CrossSection2::dSigma_integrated(double minpt1, double minpt2, double min
 		}
 		else if (yvals.size()==1)
 			result += y2intres;
+		else
+			cerr <<  "Unknown amount of yvals at "<< LINEINFO << endl;
     }
     if (yvals.size()==3)
 		result *= (maxy-miny)/6.0;
 	else if (yvals.size()==5)
 		result *= (maxy-miny)/12.0;
+	else if (yvals.size()==4)
+		result *= (maxy-miny)/8.0;
     
     return result*2.0*M_PI; //2pi from one angular integral
 }
@@ -881,7 +920,7 @@ CrossSection2::CrossSection2(AmplitudeLib* N_, PDF* pdf_,FragmentationFunction* 
     ptinterpolator2d_correction = NULL;
     ptinterpolator2d_rev_correction = NULL;
 
-	double minpt=0.5, maxpt=6.0, ptstep=0.25;
+	double minpt=0.5, maxpt=4, ptstep=0.5;
     for (double pt=minpt; pt<=maxpt; pt+=ptstep)
     {
         ptvals.push_back(pt);
@@ -898,8 +937,8 @@ CrossSection2::CrossSection2(AmplitudeLib* N_, PDF* pdf_,FragmentationFunction* 
     //string fileprefix = "rhic_central_025/";
     //fileprefix = "phenix/mv1/largenc/";
     //fileprefix = "marquet_qs015/";
-    //fileprefix = "final_result/ircutoff_lambdaqcd/mvgamma_qs033/largenc/";
-    fileprefix = "final_result/ircutoff_lambdaqcd/mv1_qs06/naive/";
+    fileprefix = "final_result/ircutoff_lambdaqcd/mvgamma_qs033/largenc/";
+    //fileprefix = "final_result/ircutoff_lambdaqcd/mv1_qs06/largenc/";
     //fileprefix="marquet_qs015/";
     fileprefix_cor = "rhic_korjaus_central/";
     
@@ -1123,6 +1162,12 @@ int CrossSection2::LoadPtData(double y1, double y2)
                     dphi.push_back(StrToReal(angle));
                 }
             }
+            if (dphi[dphi.size()-1]<3.1)
+            {
+				cerr << "Max dphi in file " << fname.str() << " is " << dphi[dphi.size()-1] << " at " << LINEINFO  << endl;
+				//dphi.push_back(3.14159); xs.push_back(0);
+				exit(1);
+			}
             // Subtract DPS contribution completely
 			//SubtractMinimum(xs);
             while (!file_rev.eof())
@@ -1138,6 +1183,12 @@ int CrossSection2::LoadPtData(double y1, double y2)
                     dphi_rev.push_back(StrToReal(angle));
                 }                
             }
+            if (dphi_rev[dphi_rev.size()-1]<3.1)
+            {
+				cerr << "Max dphi in file " << fname_rev.str() << " is " << dphi_rev[dphi_rev.size()-1] << endl;
+				//dphi.push_back(3.14159); xs.push_back(0);
+				exit(1);
+			}
             //SubtractMinimum(xs_rev);
             if (apply_corrections)
             {

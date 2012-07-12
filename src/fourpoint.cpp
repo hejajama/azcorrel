@@ -233,7 +233,6 @@ double CrossSection2::CorrectionTerm(double pt1, double pt2, double ya, double p
 	}
     if (std::abs(std_dev[0]/estim[0]) > 0.07)
     {
-		mcintpoints*=3;
 		if (id==0)
 		{
             //cout << "#!!!!!!!!!!!!!!! INTEGRAL DOESN'T CONVERGE!?!?!?" << endl;
