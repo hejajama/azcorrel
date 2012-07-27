@@ -1,7 +1,7 @@
 /*
  * Class to calculate cross sections related to two-body correlations
  *
- * Heikki Mäntysaari <heikki.mantysaari@jyu.fi>, 2011
+ * Heikki Mäntysaari <heikki.mantysaari@jyu.fi>, 2011-2012
  */
 
 #include "xs.hpp"
@@ -27,6 +27,8 @@ extern "C"
 {
     #include <fourier/fourier.h>
 }
+
+const bool STAR=false;	// false: phenix, true: STAR kinematics
 
 /*
  * Return d\sigma / (dpt1 dpt2 dy1 dy2 d\theta) lo approximation
@@ -421,7 +423,9 @@ double CrossSection2::dSigma_full(double pt1, double pt2, double y1, double y2,
         << " relerror " << std::abs(abserr/result) << " dphi " << phi << endl;
     */
 
-	double alphas=0.2; // Alpha_s(SQR(std::max(pt1, pt2))) 
+	double alphas=Alpha_s(SQR(std::max(pt1, pt2))); 
+	//cout << "maxpt " << std::max(pt1,pt2) << " alphas " << alphas << endl;
+	//alphas=0.2;
     result *=  Cf*alphas / (4.0*SQR(M_PI)); // NB! \int d^2b = S_T is dropped as it
     // should cancel, wouldn't work anymore if we calculated something b-dependent!!!!
 
@@ -569,14 +573,22 @@ double CrossSection2::dSigma_integrated(double minpt1, double minpt2, double min
     helper.sqrts=sqrts;
 
     std::vector<double> yvals;
-    //yvals.push_back(2.4);
-    //yvals.push_back(2.8);
-    //yvals.push_back(3.2);
-    //yvals.push_back(3.6);
-    //yvals.push_back(4);
-    yvals.push_back(3);
-    yvals.push_back(3.4);
-    yvals.push_back(3.8);
+    if (STAR)
+    {
+		yvals.push_back(2.4);
+		yvals.push_back(2.8);
+		yvals.push_back(3.2);
+		yvals.push_back(3.6);
+		yvals.push_back(4);
+	}
+	else
+	{
+		yvals.push_back(3);
+		yvals.push_back(3.2);
+		yvals.push_back(3.4);
+		yvals.push_back(3.6);
+		yvals.push_back(3.8);
+	}
     
     
     miny=yvals[0];
@@ -608,8 +620,13 @@ double CrossSection2::dSigma_integrated(double minpt1, double minpt2, double min
             LoadPtData(helper.y1, helper.y2);
             Prepare2DInterpolators(phi);
             double intresult,abserr;
-			//double minpt=2, maxpt=3.5;
-			double minpt=1.1; double maxpt=1.6;
+            double minpt=0, maxpt=0;
+            if (STAR)
+            {
+				minpt=2; maxpt=3.9;
+			} else {
+				minpt=1.1; maxpt=1.6;
+			}
                        
             gsl_integration_workspace *workspace 
              = gsl_integration_workspace_alloc(PTINT_INTERVALS_CP);
@@ -739,11 +756,19 @@ double Inthelperf_cp_pt1(double pt1, void* p)
     gsl_function fun;
     fun.function = Inthelperf_cp_pt2;
     fun.params=par;
+    
+    double minpt=0, maxpt=0;
+    if (STAR)
+    {
+		minpt=1; maxpt=pt1;
+	} else{
+		minpt=0.5; maxpt=0.75;
+	}
 
     double result,abserr;
     gsl_integration_workspace *workspace 
      = gsl_integration_workspace_alloc(PTINT_INTERVALS_CP);
-    int status = gsl_integration_qag(&fun, 0.5, 0.75,
+    int status = gsl_integration_qag(&fun, minpt, maxpt,
             0, PTINT_ACCURACY_CP, PTINT_INTERVALS_CP, GSL_INTEG_GAUSS15, workspace,
             &result, &abserr);
     gsl_integration_workspace_free(workspace);
@@ -920,7 +945,7 @@ CrossSection2::CrossSection2(AmplitudeLib* N_, PDF* pdf_,FragmentationFunction* 
     ptinterpolator2d_correction = NULL;
     ptinterpolator2d_rev_correction = NULL;
 
-	double minpt=0.5, maxpt=4, ptstep=0.5;
+	double minpt=0.5, maxpt=4.5, ptstep=0.5;
     for (double pt=minpt; pt<=maxpt; pt+=ptstep)
     {
         ptvals.push_back(pt);
@@ -937,8 +962,9 @@ CrossSection2::CrossSection2(AmplitudeLib* N_, PDF* pdf_,FragmentationFunction* 
     //string fileprefix = "rhic_central_025/";
     //fileprefix = "phenix/mv1/largenc/";
     //fileprefix = "marquet_qs015/";
-    fileprefix = "final_result/ircutoff_lambdaqcd/mvgamma_qs033/largenc/";
-    //fileprefix = "final_result/ircutoff_lambdaqcd/mv1_qs06/largenc/";
+    //fileprefix = "final_result/ircutoff_lambdaqcd/aamqs_qs036/largenc/";
+    fileprefix = "final_result/ircutoff_lambdaqcd/mv1_qs072/largenc/";
+    //fileprefix = "final_result/ircutoff_lambdaqcd/mvgamma_qs033/largenc/";
     //fileprefix="marquet_qs015/";
     fileprefix_cor = "rhic_korjaus_central/";
     
@@ -1162,6 +1188,11 @@ int CrossSection2::LoadPtData(double y1, double y2)
                     dphi.push_back(StrToReal(angle));
                 }
             }
+            if (dphi.size()==0)
+            {
+				cerr << "No valid data points in file " << fname.str() << ": " << LINEINFO << endl;
+				exit(1);
+			}
             if (dphi[dphi.size()-1]<3.1)
             {
 				cerr << "Max dphi in file " << fname.str() << " is " << dphi[dphi.size()-1] << " at " << LINEINFO  << endl;
@@ -1183,6 +1214,11 @@ int CrossSection2::LoadPtData(double y1, double y2)
                     dphi_rev.push_back(StrToReal(angle));
                 }                
             }
+            if (dphi_rev.size()==0)
+            {
+				cerr << "No valid data points in file " << fname_rev.str() << ": " << LINEINFO << endl;
+				exit(1);
+			}
             if (dphi_rev[dphi_rev.size()-1]<3.1)
             {
 				cerr << "Max dphi in file " << fname_rev.str() << " is " << dphi_rev[dphi_rev.size()-1] << endl;

@@ -388,10 +388,12 @@ double Inthelperf_correction(double* vec, size_t dim, void* p)
 				cerr << "Inf quadrupole, r " << r << " u1 " << u1 << " u2 " << u2 << endl;
 			if (isnan(quadrupole)) 
 			{ 
-				if (s_r > 0 and r > 10*u1 and r>10*u2)
-					quadrupole = s_u1*s_u2;
-				else
-					quadrupole = 0;
+				// DPS limit, this limit is shown analytically in notes
+				// u1,u2>>r: Q -> S(x-x')S(b-b') also in finite-nc 
+				if (s_u1==0 and s_u2==0 and s_r>0 )
+					quadrupole = s_r*s_r_m_u1_p_u2;
+				else   // All other nan limits vanish, right?
+					quadrupole = 0;	
 			}
 			s6 = s_r * quadrupole;
 		}

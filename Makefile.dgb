@@ -9,7 +9,7 @@ CXX = mpic++
 FOR = mpif90
 
 azcorrel: $(OBJECTS) $(COBJECTS) $(FOBJECTS) 
-	$(CXX) $(CXXFLAGS) $(LDFLAGS) $(OBJECTS) $(COBJECTS) ../amplitudelib/libamplitude.a -lgfortran -o azcorrel_dbg
+	$(CXX) $(CXXFLAGS) $(LDFLAGS) $(OBJECTS) $(COBJECTS) ../amplitudelib/libamplitude_dbg.a -lgfortran -o azcorrel_dbg
 .cpp.o:
 	$(CXX) $(CXXFLAGS) $< -c -o $@
 .c.o:
@@ -21,4 +21,4 @@ clean:
 	rm -f $(OBJECTS)
 	rm -f $(COBJECTS)
 	rm -f $(FOBJECTS)
-	rm -f azcorrel
+	rm -f azcorrel_dbg
