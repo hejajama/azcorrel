@@ -61,6 +61,7 @@ int main(int argc, char* argv[])
     MODE mode = MODE_DSIGMA;
     int points=10;
     double minphi=0.5, maxphi=M_PI;
+    bool fftw=false;
     
     bool finite_nc=false;
 
@@ -126,6 +127,8 @@ int main(int argc, char* argv[])
             multiply_pdf=false;
         else if (string(argv[i])=="-mq")
             mq = StrToReal(argv[i+1]);
+        else if (string(argv[i])=="-fftw")
+			fftw=true;
         else if (string(argv[i])=="-mode")
         {
             if (string(argv[i+1])=="CP")
@@ -265,17 +268,18 @@ int main(int argc, char* argv[])
         cerr << "Negative rapidity " << ya << " at " << LINEINFO << endl;
        // return -1;
     }   
-    bool fftw=false;
+    
     
     ///DEBUG
     /*
-    for (double p=1e-5; p<50; p*=1.05)
-    {
-		amplitude.InitializeInterpolation(y1);
-		cout << p << " " << cross_section.G(p, amplitude.X0()*std::exp(-y1), 0.5) << endl;
+	cross_section.LoadPtData(3,3);
+	cross_section.Prepare2DInterpolators(3.14159265);
+	for (double tmppt1=0.5; tmppt1<4.5; tmppt1 += 0.1)
+	{
+		double tmppt2=1.5;
+		cout << tmppt1 << " " << tmppt2 << " " << cross_section.ptinterpolator2d->Evaluate(tmppt1, tmppt2) << " " << cross_section.ptinterpolator2d->Evaluate(tmppt2, tmppt1) << endl;
 	}
-	return 0;
-*/
+	return 0;*/
     
     amplitude.InitializeInterpolation(ya);
     double normalization = 1;//cross_section.Sigma(pt1, pt2, y1, y2, sqrts);

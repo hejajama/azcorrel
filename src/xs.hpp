@@ -70,6 +70,7 @@ class CrossSection2
         void SetFiniteNc(bool fnc);
         
         Interpolator2D *ptinterpolator2d;
+        Interpolator2D *ptinterpolator2d_rev;
 
     private:
         double m_q; // Quark mass
@@ -92,7 +93,7 @@ class CrossSection2
         std::vector<std::vector< Interpolator*> > ptinterpolators;
         std::vector<std::vector< Interpolator*> > ptinterpolators_rev;
         
-        Interpolator2D *ptinterpolator2d_rev;
+        
         std::vector<std::vector< Interpolator*> > ptinterpolators_correction;
         std::vector<std::vector< Interpolator*> > ptinterpolators_rev_correction;
         Interpolator2D *ptinterpolator2d_correction;

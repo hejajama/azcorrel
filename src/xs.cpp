@@ -28,7 +28,7 @@ extern "C"
     #include <fourier/fourier.h>
 }
 
-const bool STAR=false;	// false: phenix, true: STAR kinematics
+const bool STAR=true;	// false: phenix, true: STAR kinematics
 
 /*
  * Return d\sigma / (dpt1 dpt2 dy1 dy2 d\theta) lo approximation
@@ -426,7 +426,8 @@ double CrossSection2::dSigma_full(double pt1, double pt2, double y1, double y2,
 	double alphas=Alpha_s(SQR(std::max(pt1, pt2))); 
 	//cout << "maxpt " << std::max(pt1,pt2) << " alphas " << alphas << endl;
 	//alphas=0.2;
-    result *=  Cf*alphas / (4.0*SQR(M_PI)); // NB! \int d^2b = S_T is dropped as it
+    result *=  Nc/2.0*alphas / (4.0*SQR(M_PI)); // NB! \int d^2b = S_T is dropped as it
+    // Nc/2 as we have Cf * Nc/(2Cf) = Nc/2 in large and finite-nc
     // should cancel, wouldn't work anymore if we calculated something b-dependent!!!!
 
     return result;
@@ -471,9 +472,6 @@ double dSigma_full_helperf_z2(double z2, void* p)
 
     double result=0;
     double qscale = std::max(par->pt1, par->pt2);
-    if (qscale < par->xs->Pdf()->MinQ() )
-        cerr << "Q=" << qscale << " too small, pt1: " << par->pt1 << ", pt2: " << par->pt2
-            << " " << LINEINFO << endl;
 
     double xh = par->xs->xh(par->pt1/par->z1, par->pt2/z2, par->y1, par->y2, par->sqrts);
     /*double xa = par->xs->xa(par->pt1/par->z1, par->pt2/z2, par->y1, par->y2, par->sqrts);
@@ -625,7 +623,7 @@ double CrossSection2::dSigma_integrated(double minpt1, double minpt2, double min
             {
 				minpt=2; maxpt=3.9;
 			} else {
-				minpt=1.1; maxpt=1.6;
+				minpt=1.6; maxpt=2.0;
 			}
                        
             gsl_integration_workspace *workspace 
@@ -1086,15 +1084,12 @@ bool CrossSection2::FiniteNc()
  // huge file. Sry.
 /*
  * Load \Delta \phi data from files pt1_#_pt2_#_y1_#_y2_#, interpolate in pt and phi
- * Integrate over kinematical variables z_1,z_2 to take into account
- * hadronization
- *
- * The given ptinterpolator2d is used to save the 2d interpolator
  *
  * Returns 0 if no error occurred, otherwise <0
  */
 int CrossSection2::LoadPtData(double y1, double y2)
 {
+	//cout << "Loading: y1=" << y1 <<", y2=" << y2 << endl;
    // Load datafiles 
    // Generate interpolators
 
@@ -1160,12 +1155,7 @@ int CrossSection2::LoadPtData(double y1, double y2)
             std::ifstream file(fname.str().c_str());
             std::ifstream file_rev(fname_rev.str().c_str());
             
-            if (!file.is_open() or !file_rev.is_open() )
-            {
-                cerr << "Can't open file " << fname.str() << " or " << fname_rev.str()
-                    << " " << LINEINFO << endl;
-                return -1;
-            }
+            
             std::vector<double> dphi;
             std::vector<double> dphi_rev;
             std::vector<double> xs;
@@ -1175,7 +1165,14 @@ int CrossSection2::LoadPtData(double y1, double y2)
             std::vector<double> dphi_rev_cor;
             std::vector<double> xs_cor;
             std::vector<double> xs_rev_cor;
-            while(!file.eof())
+            if (!file.is_open()  )
+            {
+                cerr << "Can't open file " << fname.str()  << " " << LINEINFO << ", assuming=0" << endl;
+                dphi.push_back(0.5); dphi.push_back(1.4); dphi.push_back(2.5); dphi.push_back(3.141592);
+                xs.push_back(0); xs.push_back(0); xs.push_back(0);xs.push_back(0);
+                //return -1;
+            }
+            while(!file.eof() and file.is_open())
             {
                 string line;
                 getline(file, line);
@@ -1199,9 +1196,15 @@ int CrossSection2::LoadPtData(double y1, double y2)
 				//dphi.push_back(3.14159); xs.push_back(0);
 				exit(1);
 			}
-            // Subtract DPS contribution completely
-			//SubtractMinimum(xs);
-            while (!file_rev.eof())
+            
+            if (!file_rev.is_open()  )
+            {
+                cerr << "Can't open file " << fname_rev.str()  << " " << LINEINFO << ", assuming=0" << endl;
+                dphi_rev.push_back(0.5); dphi_rev.push_back(1.4); dphi_rev.push_back(2.5); dphi_rev.push_back(3.141592);
+                xs_rev.push_back(0); xs_rev.push_back(0); xs_rev.push_back(0);xs_rev.push_back(0);
+                //return -1;
+            }
+            while (!file_rev.eof() and file_rev.is_open())
             {
                 string line;
                 getline(file_rev, line);

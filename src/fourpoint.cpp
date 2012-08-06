@@ -243,7 +243,8 @@ double CrossSection2::CorrectionTerm(double pt1, double pt2, double ya, double p
 		}
 		return -100;
     }
-
+	else if (std::abs(std_dev[0]/estim[0])<0.01) // Can reduce number of mcintpoints
+		mcintpoints /= 2.0;
     
 
     
