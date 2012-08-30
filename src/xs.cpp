@@ -28,7 +28,7 @@ extern "C"
     #include <fourier/fourier.h>
 }
 
-const bool STAR=true;	// false: phenix, true: STAR kinematics
+const bool STAR=false;	// false: phenix, true: STAR kinematics
 
 /*
  * Return d\sigma / (dpt1 dpt2 dy1 dy2 d\theta) lo approximation
@@ -95,7 +95,7 @@ double CrossSection2::dSigma(double pt1, double pt2, double y1, double y2, doubl
     double ya = std::log(N->X0()/tmpxa);
     if (ya<0)
         cerr << "Negative rapidity interval at " << LINEINFO << endl;
-    //ya=0;  tmpxa=N->X0(); /////TODO!!!!!!!!!!! DEBUG!!!!!!!
+    
     if (!N->InterpolatorInitialized(ya))
         N->InitializeInterpolation(ya);
     double delta = Delta(pt1,pt2,phi);
@@ -425,10 +425,11 @@ double CrossSection2::dSigma_full(double pt1, double pt2, double y1, double y2,
 
 	double alphas=Alpha_s(SQR(std::max(pt1, pt2))); 
 	//cout << "maxpt " << std::max(pt1,pt2) << " alphas " << alphas << endl;
-	//alphas=0.2;
+	//double alphas=0.2;
     result *=  Nc/2.0*alphas / (4.0*SQR(M_PI)); // NB! \int d^2b = S_T is dropped as it
-    // Nc/2 as we have Cf * Nc/(2Cf) = Nc/2 in large and finite-nc
     // should cancel, wouldn't work anymore if we calculated something b-dependent!!!!
+    // Nc/2 as we have Cf * Nc/(2Cf) = Nc/2 in large and finite-nc
+    
 
     return result;
 }
@@ -621,9 +622,9 @@ double CrossSection2::dSigma_integrated(double minpt1, double minpt2, double min
             double minpt=0, maxpt=0;
             if (STAR)
             {
-				minpt=2; maxpt=3.9;
+				minpt=2; maxpt=4;
 			} else {
-				minpt=1.6; maxpt=2.0;
+				minpt=1.6; maxpt=2;
 			}
                        
             gsl_integration_workspace *workspace 
@@ -943,7 +944,7 @@ CrossSection2::CrossSection2(AmplitudeLib* N_, PDF* pdf_,FragmentationFunction* 
     ptinterpolator2d_correction = NULL;
     ptinterpolator2d_rev_correction = NULL;
 
-	double minpt=0.5, maxpt=4.5, ptstep=0.5;
+	double minpt=0.5, maxpt=5.5, ptstep=0.5;
     for (double pt=minpt; pt<=maxpt; pt+=ptstep)
     {
         ptvals.push_back(pt);
@@ -1133,6 +1134,7 @@ int CrossSection2::LoadPtData(double y1, double y2)
        std::vector<Interpolator*> tmpinterpolators_rev_cor;
        for (int pt2ind=0; pt2ind<points; pt2ind++)
        {
+		   double x = xh(ptvals[pt1ind], ptvals[pt2ind], y1, y2, 200);
             std::stringstream fname, fname_rev, fname_cor, fname_rev_cor;
             /*fname << fileprefix << "pt1_" << ptstrings[pt1ind] << "_pt2_"
                 << ptstrings[pt2ind] << "_y1_" << y1str << "_y2_" << y2str << postfix;
@@ -1167,7 +1169,8 @@ int CrossSection2::LoadPtData(double y1, double y2)
             std::vector<double> xs_rev_cor;
             if (!file.is_open()  )
             {
-                cerr << "Can't open file " << fname.str()  << " " << LINEINFO << ", assuming=0" << endl;
+				if (x<1)
+					cerr << "Can't open file " << fname.str()  << " " << LINEINFO << ", assuming=0" << " (x_h=" << x <<")" << endl;
                 dphi.push_back(0.5); dphi.push_back(1.4); dphi.push_back(2.5); dphi.push_back(3.141592);
                 xs.push_back(0); xs.push_back(0); xs.push_back(0);xs.push_back(0);
                 //return -1;
@@ -1187,19 +1190,20 @@ int CrossSection2::LoadPtData(double y1, double y2)
             }
             if (dphi.size()==0)
             {
-				cerr << "No valid data points in file " << fname.str() << ": " << LINEINFO << endl;
+				cerr << "No valid data points in file " << fname.str() << " (x_h=" << x << "): " << LINEINFO << endl;
 				exit(1);
 			}
             if (dphi[dphi.size()-1]<3.1)
             {
-				cerr << "Max dphi in file " << fname.str() << " is " << dphi[dphi.size()-1] << " at " << LINEINFO  << endl;
-				//dphi.push_back(3.14159); xs.push_back(0);
-				exit(1);
+				cerr << "Max dphi in file " << fname.str() << " is " << dphi[dphi.size()-1] << " at " << LINEINFO  << " (x_h=" << x << ")" << endl;
+				dphi.clear(); dphi.push_back(0.5); dphi.push_back(1); dphi.push_back(1.5); dphi.push_back(3.141592);
+				xs.clear(); xs.push_back(0);xs.push_back(0);xs.push_back(0);xs.push_back(0);
 			}
             
             if (!file_rev.is_open()  )
             {
-                cerr << "Can't open file " << fname_rev.str()  << " " << LINEINFO << ", assuming=0" << endl;
+				if (x<1)
+					cerr << "Can't open file " << fname_rev.str()  << " " << LINEINFO << ", assuming=0" << " (x_h=" << x << "): " << endl;
                 dphi_rev.push_back(0.5); dphi_rev.push_back(1.4); dphi_rev.push_back(2.5); dphi_rev.push_back(3.141592);
                 xs_rev.push_back(0); xs_rev.push_back(0); xs_rev.push_back(0);xs_rev.push_back(0);
                 //return -1;
@@ -1219,58 +1223,16 @@ int CrossSection2::LoadPtData(double y1, double y2)
             }
             if (dphi_rev.size()==0)
             {
-				cerr << "No valid data points in file " << fname_rev.str() << ": " << LINEINFO << endl;
+				cerr << "No valid data points in file " << fname_rev.str() << ": " << LINEINFO << " (x_h=" << x << "): " << endl;
 				exit(1);
 			}
             if (dphi_rev[dphi_rev.size()-1]<3.1)
             {
-				cerr << "Max dphi in file " << fname_rev.str() << " is " << dphi_rev[dphi_rev.size()-1] << endl;
-				//dphi.push_back(3.14159); xs.push_back(0);
-				exit(1);
+				cerr << "Max dphi in file " << fname_rev.str() << " is " << dphi_rev[dphi_rev.size()-1] <<  " (x_h=" << x << "): " << endl;
+				dphi.clear(); dphi.push_back(0.5); dphi.push_back(1); dphi.push_back(1.5); dphi.push_back(3.141592);
+				xs.clear(); xs.push_back(0);xs.push_back(0);xs.push_back(0);xs.push_back(0);
 			}
             //SubtractMinimum(xs_rev);
-            if (apply_corrections)
-            {
-				cout << "# Applying corerctions, are you sure!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!" << endl;
-                std::ifstream file_cor(fname_cor.str().c_str());
-                std::ifstream file_rev_cor(fname_rev_cor.str().c_str());
-                
-                if (!file.is_open() or !file_rev.is_open() )
-                {
-                    cerr << "Can't open file " << fname_cor.str() << " or " << fname_rev_cor.str()
-                        << " " << LINEINFO << endl;
-                    return -1;
-                }
-            
-                while(!file_cor.eof())
-                {
-                    string line;
-                    getline(file_cor, line);
-                    if (line.substr(0,1)!="#" and line.length()>3)  // not comment/empty
-                    {
-                        std::istringstream iss(line);
-                        string angle,val;
-                        iss >> angle; iss >> val;
-                        xs_cor.push_back(StrToReal(val));
-                        dphi_cor.push_back(StrToReal(angle));
-                    }
-                }
-                while (!file_rev_cor.eof())
-                {
-                    string line;
-                    getline(file_rev_cor, line);
-                    if (line.substr(0,1)!="#" and line.length()>3)  // not comment/empty
-                    {
-                        std::istringstream iss(line);
-                        string angle,val;
-                        iss >> angle; iss >> val;
-                        xs_rev_cor.push_back(StrToReal(val));
-                        dphi_rev_cor.push_back(StrToReal(angle));
-                    }
-                }
-                file_cor.close();
-                file_rev_cor.close();
-            }
 
 
             file.close();
@@ -1303,35 +1265,6 @@ int CrossSection2::LoadPtData(double y1, double y2)
                     xs_rev.push_back(xs_rev[i]);
                 }
             }
-            if (apply_corrections)
-            {
-                if (dphi_cor[dphi_cor.size()-1] < 1.01*M_PI)
-                {
-                    for (int i=dphi_cor.size()-2; i>=0; i--)
-                    {
-                        dphi_cor.push_back(M_PI + (M_PI-dphi_cor[i]) );
-                        xs_cor.push_back(xs_cor[i]);
-                    }
-                }
-                // Mirror \dphi if necessary
-                if (dphi_rev[dphi_rev_cor.size()-1] < 1.01*M_PI)
-                {
-                    for (int i=dphi_rev_cor.size()-2; i>=0; i--)
-                    {
-                        dphi_rev_cor.push_back(M_PI + (M_PI-dphi_rev_cor[i]) );
-                        xs_rev_cor.push_back(xs_rev_cor[i]);
-                    }
-                }
-
-                Interpolator *tmpinterp_cor = new Interpolator(dphi_cor, xs_cor);
-                tmpinterp_cor->Initialize();
-                tmpinterpolators_cor.push_back(tmpinterp_cor);
-
-                Interpolator *tmpinterp_rev_cor = new Interpolator(dphi_rev_cor, xs_rev_cor);
-                tmpinterp_rev_cor->Initialize();
-                tmpinterpolators_rev_cor.push_back(tmpinterp_rev_cor);
-            
-            }
             
 
             Interpolator *tmpinterp = new Interpolator(dphi, xs);
@@ -1346,11 +1279,7 @@ int CrossSection2::LoadPtData(double y1, double y2)
         }
         ptinterpolators.push_back(tmpinterpolators);
         ptinterpolators_rev.push_back(tmpinterpolators_rev);
-        if (apply_corrections)
-        {
-            ptinterpolators_correction.push_back(tmpinterpolators_cor);
-            ptinterpolators_rev_correction.push_back(tmpinterpolators_rev_cor);
-        }
+
    }
    //cout << "# Data loaded" << endl;
 

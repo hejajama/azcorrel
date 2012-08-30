@@ -231,7 +231,7 @@ double CrossSection2::CorrectionTerm(double pt1, double pt2, double ya, double p
         << " effect " << estim[0]*constants << " +/- " << std_dev[0]*constants << " relerr " << std::abs(std_dev[0]/estim[0]) << " time "
        << (std::time(NULL)-start)/60.0/60.0 << " h"<< endl;
 	}
-    if (std::abs(std_dev[0]/estim[0]) > 0.07)
+    if (std::abs(std_dev[0]/estim[0]) > 0.1)
     {
 		if (id==0)
 		{
@@ -346,7 +346,7 @@ double Inthelperf_correction(double* vec, size_t dim, void* p)
         
     }
     
-    // Finite-Nc part
+    
     if (correction)
     {
 		
