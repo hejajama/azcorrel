@@ -425,7 +425,7 @@ double CrossSection2::dSigma_full(double pt1, double pt2, double y1, double y2,
 
 	double alphas=Alpha_s(SQR(std::max(pt1, pt2))); 
 	//cout << "maxpt " << std::max(pt1,pt2) << " alphas " << alphas << endl;
-	//double alphas=0.2;
+	//alphas=0.2;
     result *=  Nc/2.0*alphas / (4.0*SQR(M_PI)); // NB! \int d^2b = S_T is dropped as it
     // should cancel, wouldn't work anymore if we calculated something b-dependent!!!!
     // Nc/2 as we have Cf * Nc/(2Cf) = Nc/2 in large and finite-nc
@@ -575,17 +575,17 @@ double CrossSection2::dSigma_integrated(double minpt1, double minpt2, double min
     if (STAR)
     {
 		yvals.push_back(2.4);
-		yvals.push_back(2.8);
+		//yvals.push_back(2.8);
 		yvals.push_back(3.2);
-		yvals.push_back(3.6);
+		//yvals.push_back(3.6);
 		yvals.push_back(4);
 	}
 	else
 	{
 		yvals.push_back(3);
-		yvals.push_back(3.2);
+		//yvals.push_back(3.2);
 		yvals.push_back(3.4);
-		yvals.push_back(3.6);
+		//yvals.push_back(3.6);
 		yvals.push_back(3.8);
 	}
     
@@ -962,7 +962,7 @@ CrossSection2::CrossSection2(AmplitudeLib* N_, PDF* pdf_,FragmentationFunction* 
     //fileprefix = "phenix/mv1/largenc/";
     //fileprefix = "marquet_qs015/";
     //fileprefix = "final_result/ircutoff_lambdaqcd/aamqs_qs036/largenc/";
-    fileprefix = "final_result/ircutoff_lambdaqcd/mv1_qs072/largenc/";
+    fileprefix = "final_result/ircutoff_lambdaqcd/mv1_qs02/largenc/";
     //fileprefix = "final_result/ircutoff_lambdaqcd/mvgamma_qs033/largenc/";
     //fileprefix="marquet_qs015/";
     fileprefix_cor = "rhic_korjaus_central/";
@@ -1148,10 +1148,7 @@ int CrossSection2::LoadPtData(double y1, double y2)
                 << ptstrings[pt1ind] <<"_pt2_" << ptstrings[pt2ind];
               
 		
-            fname_cor << fileprefix_cor << "korjaus_pt1_" << ptstrings[pt1ind] << "_pt2_" << ptstrings[pt2ind]
-                << "_y1_" << y1str <<"_y2_" << y2str;
-            fname_rev_cor << fileprefix_cor  << "korjaus_pt1_" << ptstrings[pt1ind] << "_pt2_" << ptstrings[pt2ind]
-                << "_y1_" << y2str <<"_y2_" << y1str;
+
             //cout << "# Loading files " << fname.str() << " and " << fname_rev.str() << endl;
             
             std::ifstream file(fname.str().c_str());
@@ -1163,10 +1160,6 @@ int CrossSection2::LoadPtData(double y1, double y2)
             std::vector<double> xs;
             std::vector<double> xs_rev;
 
-            std::vector<double> dphi_cor;
-            std::vector<double> dphi_rev_cor;
-            std::vector<double> xs_cor;
-            std::vector<double> xs_rev_cor;
             if (!file.is_open()  )
             {
 				if (x<1)
@@ -1190,15 +1183,20 @@ int CrossSection2::LoadPtData(double y1, double y2)
             }
             if (dphi.size()==0)
             {
-				cerr << "No valid data points in file " << fname.str() << " (x_h=" << x << "): " << LINEINFO << endl;
-				exit(1);
+				if (x<1)
+					cerr << "No valid data points in file " << fname.str() << " (x_h=" << x << ", assuming=0): " << LINEINFO << endl;
+				dphi.push_back(0.5); dphi.push_back(1.4); dphi.push_back(2.5); dphi.push_back(3.141592);
+                xs.push_back(0); xs.push_back(0); xs.push_back(0);xs.push_back(0);
 			}
             if (dphi[dphi.size()-1]<3.1)
             {
-				cerr << "Max dphi in file " << fname.str() << " is " << dphi[dphi.size()-1] << " at " << LINEINFO  << " (x_h=" << x << ")" << endl;
+				if (x<1)
+					cerr << "Max dphi in file " << fname.str() << " is " << dphi[dphi.size()-1] << " at " << LINEINFO  << " (x_h=" << x << ", assuming=0)" << endl;
 				dphi.clear(); dphi.push_back(0.5); dphi.push_back(1); dphi.push_back(1.5); dphi.push_back(3.141592);
 				xs.clear(); xs.push_back(0);xs.push_back(0);xs.push_back(0);xs.push_back(0);
 			}
+			if (dphi[0]>1)
+				cerr << "Min dphi in file " << fname.str() << " is " << dphi[0] << " " << LINEINFO << endl;
             
             if (!file_rev.is_open()  )
             {
@@ -1223,29 +1221,24 @@ int CrossSection2::LoadPtData(double y1, double y2)
             }
             if (dphi_rev.size()==0)
             {
-				cerr << "No valid data points in file " << fname_rev.str() << ": " << LINEINFO << " (x_h=" << x << "): " << endl;
-				exit(1);
+				if (x<1)
+					cerr << "No valid data points in file " << fname_rev.str() << ": " << LINEINFO << " (x_h=" << x << ", assuming=0): " << endl;
+				dphi_rev.push_back(0.5);  dphi_rev.push_back(1); dphi_rev.push_back(1.5); dphi_rev.push_back(3.141592);
+				xs_rev.clear(); xs_rev.push_back(0);xs_rev.push_back(0);xs_rev.push_back(0);xs_rev.push_back(0);
 			}
             if (dphi_rev[dphi_rev.size()-1]<3.1)
             {
-				cerr << "Max dphi in file " << fname_rev.str() << " is " << dphi_rev[dphi_rev.size()-1] <<  " (x_h=" << x << "): " << endl;
-				dphi.clear(); dphi.push_back(0.5); dphi.push_back(1); dphi.push_back(1.5); dphi.push_back(3.141592);
-				xs.clear(); xs.push_back(0);xs.push_back(0);xs.push_back(0);xs.push_back(0);
+				if (x<1)
+					cerr << "Max dphi in file " << fname_rev.str() << " is " << dphi_rev[dphi_rev.size()-1] <<  " (x_h=" << x << ", assuming=0): " << endl;
+				dphi_rev.clear(); 		dphi_rev.push_back(0.5);  dphi_rev.push_back(1); dphi_rev.push_back(1.5); dphi_rev.push_back(3.141592);
+				xs_rev.clear(); xs_rev.push_back(0);xs_rev.push_back(0);xs_rev.push_back(0);xs_rev.push_back(0);
 			}
-            //SubtractMinimum(xs_rev);
+			if (dphi[0]>1)
+				cerr << "Min dphi in file " << fname.str() << " is " << dphi[0] << " " << LINEINFO << endl;
 
 
             file.close();
             file_rev.close();
-
-            if (xs.size()<2 or xs_rev.size()<2)
-            {
-                cerr << "Datafile without valid datapoints, filename " <<
-                    fname.str() << " or " << fname_rev.str()
-                    << " or " << fname_cor.str() << " or " << fname_rev_cor.str()
-                    << " " << LINEINFO << endl;
-                return -1;
-            }
 
             // Mirror \dphi if necessary
             if (dphi[dphi.size()-1] < 1.01*M_PI)
