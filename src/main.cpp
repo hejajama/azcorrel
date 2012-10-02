@@ -183,7 +183,7 @@ int main(int argc, char* argv[])
         }
     }
 
-    if (!pdf)   // Not initializd, use default
+    if (!pdf and mode != MODE_DSIGMA)   // Not initializd, use default
     {
         pdf = new CTEQ();
         pdf->Initialize();
@@ -199,9 +199,12 @@ int main(int argc, char* argv[])
     
 
     AmplitudeLib amplitude(amplitude_filename);
-    DSS fragmentation;
+    DSS *fragmentation = NULL;
+    
+    if (mode != MODE_DSIGMA)
+		fragmentation = new DSS();
 
-    CrossSection2 cross_section(&amplitude, pdf, &fragmentation);
+    CrossSection2 cross_section(&amplitude, pdf, fragmentation);
     cross_section.SetMCIntPoints(mcintpoints);
     cross_section.SetM_Q(mq);
     cross_section.SetFiniteNc(finite_nc);
@@ -230,7 +233,7 @@ int main(int argc, char* argv[])
     if (multiply_pdf)
     {
         infostr << "# Parton distribution function used: " << pdf->GetString() << endl;
-        infostr << "# Fragfun: " << fragmentation.GetString() << endl;
+        infostr << "# Fragfun: " << fragmentation->GetString() << endl;
     }
     else
         infostr <<"# Not multiplying by PDF" << endl;
@@ -350,8 +353,10 @@ int main(int argc, char* argv[])
         
     }
 
-
-    delete pdf;
+	if (pdf != NULL)
+		delete pdf;
+	if (fragmentation != NULL)
+		delete fragmentation;
 
     #ifdef USE_MPI
     //if (id==0)

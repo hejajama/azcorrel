@@ -28,7 +28,7 @@ extern "C"
     #include <fourier/fourier.h>
 }
 
-const bool STAR=false;	// false: phenix, true: STAR kinematics
+const bool STAR=true;	// false: phenix, true: STAR kinematics
 
 /*
  * Return d\sigma / (dpt1 dpt2 dy1 dy2 d\theta) lo approximation
@@ -575,9 +575,9 @@ double CrossSection2::dSigma_integrated(double minpt1, double minpt2, double min
     if (STAR)
     {
 		yvals.push_back(2.4);
-		//yvals.push_back(2.8);
+		yvals.push_back(2.8);
 		yvals.push_back(3.2);
-		//yvals.push_back(3.6);
+		yvals.push_back(3.6);
 		yvals.push_back(4);
 	}
 	else
@@ -944,7 +944,7 @@ CrossSection2::CrossSection2(AmplitudeLib* N_, PDF* pdf_,FragmentationFunction* 
     ptinterpolator2d_correction = NULL;
     ptinterpolator2d_rev_correction = NULL;
 
-	double minpt=0.5, maxpt=5.5, ptstep=0.5;
+	double minpt=0.5, maxpt=7.5, ptstep=0.5;
     for (double pt=minpt; pt<=maxpt; pt+=ptstep)
     {
         ptvals.push_back(pt);
@@ -962,7 +962,7 @@ CrossSection2::CrossSection2(AmplitudeLib* N_, PDF* pdf_,FragmentationFunction* 
     //fileprefix = "phenix/mv1/largenc/";
     //fileprefix = "marquet_qs015/";
     //fileprefix = "final_result/ircutoff_lambdaqcd/aamqs_qs036/largenc/";
-    fileprefix = "final_result/ircutoff_lambdaqcd/mv1_qs02/largenc/";
+    fileprefix = "final_result/ircutoff_lambdaqcd/mv1_qs072/largenc/";
     //fileprefix = "final_result/ircutoff_lambdaqcd/mvgamma_qs033/largenc/";
     //fileprefix="marquet_qs015/";
     fileprefix_cor = "rhic_korjaus_central/";
@@ -1135,6 +1135,7 @@ int CrossSection2::LoadPtData(double y1, double y2)
        for (int pt2ind=0; pt2ind<points; pt2ind++)
        {
 		   double x = xh(ptvals[pt1ind], ptvals[pt2ind], y1, y2, 200);
+		   double x_rev = xh(ptvals[pt1ind], ptvals[pt2ind], y2, y1, 200);
             std::stringstream fname, fname_rev, fname_cor, fname_rev_cor;
             /*fname << fileprefix << "pt1_" << ptstrings[pt1ind] << "_pt2_"
                 << ptstrings[pt2ind] << "_y1_" << y1str << "_y2_" << y2str << postfix;
@@ -1163,7 +1164,7 @@ int CrossSection2::LoadPtData(double y1, double y2)
             if (!file.is_open()  )
             {
 				if (x<1)
-					cerr << "Can't open file " << fname.str()  << " " << LINEINFO << ", assuming=0" << " (x_h=" << x <<")" << endl;
+					cerr << "Can't open " << fname.str()  << " " << LINEINFO << ", assuming=0" << " (x_h=" << x <<")" << endl;
                 dphi.push_back(0.5); dphi.push_back(1.4); dphi.push_back(2.5); dphi.push_back(3.141592);
                 xs.push_back(0); xs.push_back(0); xs.push_back(0);xs.push_back(0);
                 //return -1;
@@ -1181,10 +1182,11 @@ int CrossSection2::LoadPtData(double y1, double y2)
                     dphi.push_back(StrToReal(angle));
                 }
             }
-            if (dphi.size()==0)
+            if (dphi.size()<3)
             {
 				if (x<1)
-					cerr << "No valid data points in file " << fname.str() << " (x_h=" << x << ", assuming=0): " << LINEINFO << endl;
+					cerr << "No enough data points in " << fname.str() << " (x_h=" << x << ", assuming=0): " << LINEINFO << endl;
+				dphi.clear(); xs.clear();
 				dphi.push_back(0.5); dphi.push_back(1.4); dphi.push_back(2.5); dphi.push_back(3.141592);
                 xs.push_back(0); xs.push_back(0); xs.push_back(0);xs.push_back(0);
 			}
@@ -1196,12 +1198,12 @@ int CrossSection2::LoadPtData(double y1, double y2)
 				xs.clear(); xs.push_back(0);xs.push_back(0);xs.push_back(0);xs.push_back(0);
 			}
 			if (dphi[0]>1)
-				cerr << "Min dphi in file " << fname.str() << " is " << dphi[0] << " " << LINEINFO << endl;
+				cerr << "Min dphi in file " << fname.str() << " is " << dphi[0] << " (x_h=" << x << ") " << LINEINFO << endl;
             
             if (!file_rev.is_open()  )
             {
-				if (x<1)
-					cerr << "Can't open file " << fname_rev.str()  << " " << LINEINFO << ", assuming=0" << " (x_h=" << x << "): " << endl;
+				if (x_rev<1)
+					cerr << "Can't open " << fname_rev.str()  << " " << LINEINFO << ", assuming=0" << " (x_h=" << x_rev << "): " << endl;
                 dphi_rev.push_back(0.5); dphi_rev.push_back(1.4); dphi_rev.push_back(2.5); dphi_rev.push_back(3.141592);
                 xs_rev.push_back(0); xs_rev.push_back(0); xs_rev.push_back(0);xs_rev.push_back(0);
                 //return -1;
@@ -1219,17 +1221,18 @@ int CrossSection2::LoadPtData(double y1, double y2)
                     dphi_rev.push_back(StrToReal(angle));
                 }                
             }
-            if (dphi_rev.size()==0)
+            if (dphi_rev.size()<3)
             {
-				if (x<1)
-					cerr << "No valid data points in file " << fname_rev.str() << ": " << LINEINFO << " (x_h=" << x << ", assuming=0): " << endl;
+				if (x_rev<1)
+					cerr << "Not enough data points in " << fname_rev.str() << ": " << LINEINFO << " (x_h=" << x_rev << ", assuming=0): " << endl;
+				dphi_rev.clear(); xs_rev.clear();
 				dphi_rev.push_back(0.5);  dphi_rev.push_back(1); dphi_rev.push_back(1.5); dphi_rev.push_back(3.141592);
 				xs_rev.clear(); xs_rev.push_back(0);xs_rev.push_back(0);xs_rev.push_back(0);xs_rev.push_back(0);
 			}
             if (dphi_rev[dphi_rev.size()-1]<3.1)
             {
-				if (x<1)
-					cerr << "Max dphi in file " << fname_rev.str() << " is " << dphi_rev[dphi_rev.size()-1] <<  " (x_h=" << x << ", assuming=0): " << endl;
+				if (x_rev<1)
+					cerr << "Max dphi in file " << fname_rev.str() << " is " << dphi_rev[dphi_rev.size()-1] <<  " (x_h=" << x_rev << ", assuming=0): " << endl;
 				dphi_rev.clear(); 		dphi_rev.push_back(0.5);  dphi_rev.push_back(1); dphi_rev.push_back(1.5); dphi_rev.push_back(3.141592);
 				xs_rev.clear(); xs_rev.push_back(0);xs_rev.push_back(0);xs_rev.push_back(0);xs_rev.push_back(0);
 			}
@@ -1259,11 +1262,11 @@ int CrossSection2::LoadPtData(double y1, double y2)
                 }
             }
             
-
+			//cerr << fname.str() << endl;
             Interpolator *tmpinterp = new Interpolator(dphi, xs);
             tmpinterp->Initialize();
             tmpinterpolators.push_back(tmpinterp);
-
+			//cerr << fname_rev.str() << endl;
             Interpolator *tmpinterp_rev = new Interpolator(dphi_rev, xs_rev);
             tmpinterp_rev->Initialize();
             tmpinterpolators_rev.push_back(tmpinterp_rev);
