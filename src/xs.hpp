@@ -21,13 +21,16 @@ class CrossSection2
         ~CrossSection2();
         double dSigma_lo(double pt1, double pt2, double y1, double y2, double theta, double sqrts
             , bool multiply_pdf=false);
-        double dSigma(double pt1, double pt2, double y1, double y2, double theta, double sqrts,
-            bool pdf=true);
+        double dSigma(double pt1, double pt2, double y1, double y2, double theta, double sqrts);
         double CorrectionTerm(double pt1, double pt2, double ya, double phi, double z);
+       
         double CorrectionTerm_nomc(double pt1, double pt2, double ya, double phi);
         double CorrectionTerm_fft(double pt1, double pt2, double ya, double phi);
         void CalculateCorrection_fft(double ya, double z);
         double Sigma(double pt1, double pt2, double y1, double y2, double sqrts);
+        
+        double UncorrectedGluon(double pt1, double pt2, double y1, double y2, double theta, double sqrts);
+        double GluonCorrectionTerm(double pt1, double pt2, double ya, double phi, double z);
 
 
         double Z(double pt1, double pt2, double y1, double y2);
@@ -71,6 +74,8 @@ class CrossSection2
         
         Interpolator2D *ptinterpolator2d;
         Interpolator2D *ptinterpolator2d_rev;
+        
+        void SetGluon(bool gluon_);
 
     private:
         double m_q; // Quark mass
@@ -111,6 +116,24 @@ class CrossSection2
 
         bool apply_corrections; 
         
+        bool gluon;
+        
 };
+
+
+struct Inthelper_correction
+{
+    double pt1,pt2,ya;
+    double phi;
+    AmplitudeLib* N;
+    size_t calln; int monte;
+    CrossSection2* xs;
+    bool finite_nc;
+    bool gluon;
+
+    double u1,u2,r,theta1,theta2,thetar,z;
+};
+
+double step(double x);
 
 #endif

@@ -71,14 +71,13 @@ double CrossSection2::dSigma_lo(double pt1, double pt2, double y1, double y2, do
 /*
  * Ref. 0708.0231 eq (57)&(54), no k_t factorization/other approximations
  *
- * If pdf=true (default), then multiply by parton distribution function
- * Returns -1 if integral doesn't converge and MC integral is used
+ * Returns -99999999 if integral doesn't converge and MC integral is used
  *
  * pt1=k: gluon
  * pt2=q: quark
  */
 double CrossSection2::dSigma(double pt1, double pt2, double y1, double y2, double phi,
-    double sqrts, bool multiply_pdf)
+    double sqrts)
 {
 	#ifdef USE_MPI
 	int id;
@@ -164,8 +163,16 @@ double CrossSection2::dSigma(double pt1, double pt2, double y1, double y2, doubl
 		if (id==0)
 		    cout << "# uncorrected result " << result << " nc-suppressed " << nc_suppress << endl;
 	#endif
-    correction = CorrectionTerm(pt1,pt2,ya,phi,tmpz);
-    if (correction < -10)
+	if (!gluon)
+	    correction = CorrectionTerm(pt1,pt2,ya,phi,tmpz);
+	else
+	{
+		result = UncorrectedGluon(pt1, pt2, y1, y2, phi, sqrts);
+		return result;
+		//correction = GluonCorrectionTerm(pt1,pt2,ya,phi,tmpz);
+		return correction;
+	}
+    if (correction < -9999)
     {
 		// Integral didn't converge
 		if (mcintpoints > mcintpoints_orig * 3) // If # of intpoints is already increased twise
@@ -176,7 +183,7 @@ double CrossSection2::dSigma(double pt1, double pt2, double y1, double y2, doubl
 			{
 			cout <<"# ERROR! Integral didn't converge even though we increased the number of mcintpoints. Quitting..." << endl;
 			}
-			return -1;	
+			return -99999999;	
 		}
 		mcintpoints*=3;
 		#ifdef USE_MPI
@@ -186,28 +193,21 @@ double CrossSection2::dSigma(double pt1, double pt2, double y1, double y2, doubl
 			
 			cout <<"# Integral didn't converge, increasing num. of intpoints by factor 3 to " << mcintpoints << endl;
 		}
-		return dSigma(pt1, pt2, y1, y2, phi, sqrts, multiply_pdf);
+		return dSigma(pt1, pt2, y1, y2, phi, sqrts);
 	}
     // Nc-supprsesed terms analytically
 
     correction +=nc_suppress;  
-    
+    if (gluon) cerr << "Shoudn't be here...\n";	///DEBUG
+	else result += correction;
 
-    result += correction;
-
-    if (!multiply_pdf)
-    {
-        // return Marquet's k^+|foo|^2F() with correction term, not multiplied
-        // by any constants, so ~d\sigma/d^3kd^3q
-        // Marquet's M w.o. S/(2\pi)^2
-        return result;
-    }
-    cerr << "Multiplying by pdf, the scale is probably stupid\n";
-    double tmpxh = xh(pt1, pt2, y1, y2, sqrts);
-
-    result *= 2.0*(pdf->xq(tmpxh, delta, UVAL) + pdf->xq(tmpxh, delta, DVAL));
-    // factor 2 from isospin symmetry: xf_u,p = xf_d,n
-
+    // return Marquet's k^+|foo|^2F() with correction term, not multiplied
+    // by any constants, so ~d\sigma/d^3kd^3q
+    // Marquet's M w.o. S/(2\pi)^2
+    return result;
+   
+	// The following terms are taken into account when calculating
+	// convolution with pdf and FF
 
     // Multiply terms which follow from change of variable d\sigma/d^3kd^q
     // => d\simga / d^2kd^2 q dy_1 dy_2
@@ -222,7 +222,7 @@ double CrossSection2::dSigma(double pt1, double pt2, double y1, double y2, doubl
     // Overall constants
     //result *= ALPHAS*Cf/(4.0*SQR(M_PI));
     
-    return result;
+    //return result;
 }
 
 
@@ -238,8 +238,8 @@ struct Inthelper_sigma
 double Inthelperf_sigma(double theta, void* p)
 {
     Inthelper_sigma *par = (Inthelper_sigma*) p;
-    double res1 = par->xs->dSigma(par->pt1, par->pt2, par->y1, par->y2, theta, par->sqrts, false);
-    double res2 = par->xs->dSigma(par->pt2, par->pt1, par->y2, par->y1, theta, par->sqrts, false);
+    double res1 = par->xs->dSigma(par->pt1, par->pt2, par->y1, par->y2, theta, par->sqrts);
+    double res2 = par->xs->dSigma(par->pt2, par->pt1, par->y2, par->y1, theta, par->sqrts);
 
     if (isnan(res1) or isnan(res2) or isinf(res1) or isinf(res2))
     {
@@ -790,13 +790,13 @@ double Inthelperf_cp_pt2(double pt2, void* p)
 }
 
 /*
- * Funktion G_{x_A} = \int dr S(r) J_1(k*r) (m=0)
+ * Funktion G_{x_A} = \int dr S(r) J_1(k*r) (m=0 or if gluon channel)
  * Or with nonzero m,z
  * mz \int dr r S(r) K_1(mzr) J1(kr)
  * as in ref. 0708.0231 but w.o. vector k/|k|
  * Default value of z=0
  */
-struct G_helper { double y; AmplitudeLib* N; double kt; double z; CrossSection2 *xs; };
+struct G_helper { double y; AmplitudeLib* N; double kt; double z; CrossSection2 *xs; bool gluon; };
 double G_helperf(double r, void* p);
 double G_helperf_smallpt(double r, void* p);
 double CrossSection2::G(double kt, double x, double z)
@@ -805,6 +805,7 @@ double CrossSection2::G(double kt, double x, double z)
     
     G_helper helper;
     helper.y = std::log(N->X0()/x); 
+    helper.gluon=gluon;
     helper.N=N; helper.kt=kt; helper.z=z; helper.xs=this;
     
     if (kt < 1e-3)
@@ -844,7 +845,7 @@ double G_helperf(double r, void *p)
     G_helper* par = (G_helper*) p;
     double M_Q = par->xs->M_Q();
     // Massless case
-    if (M_Q<1e-5 or par->z<1e-5)
+    if (M_Q<1e-5 or par->z<1e-5 or par->gluon)
     {
         //cerr<<"Calculating massless case, are you sure? " << LINEINFO << endl;
         double result=0;
@@ -1282,4 +1283,9 @@ int CrossSection2::LoadPtData(double y1, double y2)
   
 
     return 0;
+}
+
+void CrossSection2::SetGluon(bool g_)
+{
+	gluon=g_;
 }

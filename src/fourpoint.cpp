@@ -27,17 +27,7 @@ using std::sin;
  * Heikki Mäntysaari <heikki.mantysaari@jyu.fi>, 2011-2012
  */
 
-struct Inthelper_correction
-{
-    double pt1,pt2,ya;
-    double phi;
-    AmplitudeLib* N;
-    size_t calln; int monte;
-    CrossSection2* xs;
-    bool finite_nc;
 
-    double u1,u2,r,theta1,theta2,thetar,z;
-};
 
 double Inthelperf_correction(double* vec, size_t dim, void* p);
 void pVegas_wrapper(double x[6], double f[1], void* par);
@@ -63,7 +53,8 @@ double CrossSection2::CorrectionTerm(double pt1, double pt2, double ya, double p
     if(id==0) 
     #endif
     cout << "# Starting MC integral, marquet: " << cyrille << ", correction: " << correction 
-        << " finite-Nc " << FiniteNc() << " ir-cutoff " << IR_CUTOFF << " GeV " << endl;
+        << " finite-Nc " << FiniteNc() << " ir-cutoff " << IR_CUTOFF << " GeV " <<
+        " gluon " << gluon << endl;
     
 
 
@@ -88,15 +79,23 @@ double CrossSection2::CorrectionTerm(double pt1, double pt2, double ya, double p
     // Constants taken out from integral in order to reduse number of
     // products in integrand
     double constants;
-    if (M_Q()>1e-4)
-        constants = 8.0*SQR(M_PI)*SQR(z)*SQR(M_Q())/std::pow(2.0*M_PI, 6);
-    else
-        constants = 8.0*SQR(M_PI) / std::pow(2.0*M_PI, 6);
+    if (gluon==false)
+    {
+		if (M_Q()>1e-4)
+			constants = 8.0*SQR(M_PI)*SQR(z)*SQR(M_Q())/std::pow(2.0*M_PI, 6);
+		else
+			constants = 8.0*SQR(M_PI) / std::pow(2.0*M_PI, 6);
+	}
+	else
+	{
+		constants=1.0/std::pow(2.0*M_PI, 6);
+	}
 
         Inthelper_correction helper;
             helper.pt1=pt1; helper.pt2=pt2; helper.phi=phi; helper.ya=ya;
             helper.N=N; helper.z=z; helper.calln=0; helper.monte=3;
             helper.xs=this; helper.finite_nc=FiniteNc();
+            helper.gluon=gluon;
              
         #ifndef USE_MPI
             double (*integrand)(double*,size_t,void*) = Inthelperf_correction;
@@ -241,7 +240,7 @@ double CrossSection2::CorrectionTerm(double pt1, double pt2, double ya, double p
                 << " relerr " << std::abs(std_dev[0]/estim[0]) << " pt1 " << pt1 << " pt2 "
                 << pt2 << " z " << z << endl;//" increasing mcintpoints from " << mcintpoints << " to " << mcintpoints*3 << endl;
 		}
-		return -100;
+		return -999999999;
     }
 	else if (std::abs(std_dev[0]/estim[0])<0.01) // Can reduce number of mcintpoints
 		mcintpoints /= 2.0;
@@ -306,226 +305,193 @@ double Inthelperf_correction(double* vec, size_t dim, void* p)
     double s_r=N->S(r,y);
     
 
-
+	double r_m_u1=0, s_r_m_u1=0, r_p_u2=0, s_r_p_u2=0, r_m_u1_p_u2=0, s_r_m_u1_p_u2=0;   
+    // r - u1
+    r_m_u1 = std::sqrt(SQR(r) + SQR(u1) - 2.0*u1_dot_r);
+    s_r_m_u1 = N->S(r_m_u1, y);
+    // r + u'
+    r_p_u2 = std::sqrt(SQR(r) + SQR(u2) + 2.0*u2_dot_r);
+    s_r_p_u2 = N->S(r_p_u2, y);
+    // r - u + u' = r + (u'-u)
+    r_m_u1_p_u2 = std::sqrt( SQR(r) + (SQR(u1) + SQR(u2) - 2.0*u1_dot_u2)
+                    + 2.0*(u2_dot_r - u1_dot_r) );
+	s_r_m_u1_p_u2 = N->S(r_m_u1_p_u2, y);
 
     double result = 0;
+	////////////////////////////// QUARK CHANNEL ////////////////////
+	if (!par->gluon)
+	{
 
 	
-    if (cyrille)
-    {
-		//cerr << "Do we really want to calculate this?\n";
-		// Stupid naive Large-Nc 6-point-function
-		if (!finite_nc)
-			result = std::cos(-pt1_dot_r - pt2_dot_r - pt2_dot_u2 + pt2_dot_u1)
-                * s_u1*s_u2*s_r;
-        
-        
-        result += (
-            - std::cos(-pt1_dot_r - pt2_dot_r + pt2_dot_u1 + (1.0-z)*pt1_dot_u2-z*pt2_dot_u2)
-             * s_u1
-            - std::cos(-pt1_dot_r - pt2_dot_r - pt2_dot_u2 - (1.0-z)*pt1_dot_u1 + z*pt2_dot_u1)
-             * s_u2
-            + std::cos(-pt1_dot_r - pt2_dot_r + (1.0-z)*(pt1_dot_u2 - pt1_dot_u1)
-                - z*(pt2_dot_u2 - pt2_dot_u1) )
-            ) * s_r;
-            
-    }
-    
-    double r_m_u1=0, s_r_m_u1=0, r_p_u2=0, s_r_p_u2=0, r_m_u1_p_u2=0, s_r_m_u1_p_u2=0;
-    if (finite_nc or correction)
-    {      
-        r_m_u1 = std::sqrt(SQR(r) + SQR(u1) - 2.0*u1_dot_r);
-        s_r_m_u1 = N->S(r_m_u1, y);
-        // r + u'
-        r_p_u2 = std::sqrt(SQR(r) + SQR(u2) + 2.0*u2_dot_r);
-        s_r_p_u2 = N->S(r_p_u2, y);
-        // r - u + u' = r + (u'-u)
-        r_m_u1_p_u2 = std::sqrt( SQR(r) + (SQR(u1) + SQR(u2) - 2.0*u1_dot_u2)
-                    + 2.0*(u2_dot_r - u1_dot_r) );
-        s_r_m_u1_p_u2 = N->S(r_m_u1_p_u2, y);
-        
-    }
-    
-    
-    if (correction)
-    {
-		
-		// separate 1/Nc^2 terms which contain DPS contribution, non-DPS
-		// terms are computed analytically in xs.cpp
-		double nc_suppress=0;
-		if (finite_nc)
+		if (cyrille)
 		{
-				nc_suppress = s_r * cos(-pt1_dot_r - pt2_dot_r + pt1_dot_u2 - pt1_dot_u1)
-					* (- 1.0 +  step(u1-1.0/IR_CUTOFF)*step(u2-1.0/IR_CUTOFF));
-			nc_suppress *= 1.0/SQR(Nc);
+			//cerr << "Do we really want to calculate this?\n";
+			// Stupid naive Large-Nc 6-point-function
+			if (!finite_nc)
+				result = std::cos(-pt1_dot_r - pt2_dot_r - pt2_dot_u2 + pt2_dot_u1)
+					* s_u1*s_u2*s_r; 
+			
+			result += (
+				- std::cos(-pt1_dot_r - pt2_dot_r + pt2_dot_u1 + (1.0-z)*pt1_dot_u2-z*pt2_dot_u2)
+				 * s_u1
+				- std::cos(-pt1_dot_r - pt2_dot_r - pt2_dot_u2 - (1.0-z)*pt1_dot_u1 + z*pt2_dot_u1)
+				 * s_u2
+				+ std::cos(-pt1_dot_r - pt2_dot_r + (1.0-z)*(pt1_dot_u2 - pt1_dot_u1)
+					- z*(pt2_dot_u2 - pt2_dot_u1) )
+				) * s_r;
+				
 		}
 		
-		double s6=0,quadrupole=0;
-		// Quadrupole
-		// Finite-Nc
-		if (finite_nc)
+
+		if (correction)
 		{
-			// F(b,x;x',b')
-			double f_b1x1x2b2 = 1.0/Cf * std::log( s_r_m_u1 * s_r_p_u2  / (s_r_m_u1_p_u2 * s_r ) );
-			// F(b,x';x,b')
-			double f_b1x2x1b2 = 1.0/Cf * std::log( s_u1 * s_u2 / (s_r_m_u1_p_u2 * s_r ) );
-			// F(b,b';x',x)
-			double f_b1b2x2x1 = 1.0/Cf * std::log( s_r_m_u1 * s_r_p_u2 / (s_u1 * s_u2) );
 			
-			// \Delta in Ref.
-			double f_delta = SQR( f_b1x2x1b2 ) + 4.0/SQR(Nc) * f_b1x1x2b2 * f_b1b2x2x1 ;
-			double sqrt_fdelta = std::sqrt(f_delta);
-			//if (isnan(f_delta) or isnan(f_b1x1x2b2) or isnan(f_b1x2x1b2))
-			//	cout << "sqrtdelta nan: u1 " << u1 << " u2 " << u2 << " r " << r << " r-u1 " << r_m_u1 << " r+u2 " << r_p_u2 << " r-u1+u2 " << r_m_u1_p_u2 << endl;
-			quadrupole = s_u1 * s_u2 *
-				( ( (sqrt_fdelta + f_b1x2x1b2 )/2.0 - f_b1x1x2b2)/sqrt_fdelta
-					* std::exp(Nc/4.0 * sqrt_fdelta)
-				+((sqrt_fdelta - f_b1x2x1b2 )/2.0 + f_b1x1x2b2)/sqrt_fdelta
-					* std::exp(-Nc/4.0 * sqrt_fdelta) 
-				)
-				* std::exp( -Nc/4.0*f_b1x2x1b2 + 1.0/(2.0*Nc)*f_b1x1x2b2);
-			
-			if (isinf(quadrupole))
-				cerr << "Inf quadrupole, r " << r << " u1 " << u1 << " u2 " << u2 << endl;
-			if (isnan(quadrupole)) 
-			{ 
-				// DPS limit, this limit is shown analytically in notes
-				// u1,u2>>r: Q -> S(x-x')S(b-b') also in finite-nc 
-				if (s_u1==0 and s_u2==0 and s_r>0 )
-					quadrupole = s_r*s_r_m_u1_p_u2;
-				else   // All other nan limits vanish, right?
-					quadrupole = 0;	
+			// separate 1/Nc^2 terms which contain DPS contribution, non-DPS
+			// terms are computed analytically in xs.cpp
+			double nc_suppress=0;
+			if (finite_nc)
+			{
+					nc_suppress = s_r * cos(-pt1_dot_r - pt2_dot_r + pt1_dot_u2 - pt1_dot_u1)
+						* (- 1.0 +  step(u1-1.0/IR_CUTOFF)*step(u2-1.0/IR_CUTOFF));
+				nc_suppress *= 1.0/SQR(Nc);
 			}
-			s6 = s_r * quadrupole;
+			
+			double s6=0,quadrupole=0;
+			// Quadrupole
+			// Finite-Nc
+			if (finite_nc)
+			{
+				// F(b,x;x',b')
+				double f_b1x1x2b2 = 1.0/Cf * std::log( s_r_m_u1 * s_r_p_u2  / (s_r_m_u1_p_u2 * s_r ) );
+				// F(b,x';x,b')
+				double f_b1x2x1b2 = 1.0/Cf * std::log( s_u1 * s_u2 / (s_r_m_u1_p_u2 * s_r ) );
+				// F(b,b';x',x)
+				double f_b1b2x2x1 = 1.0/Cf * std::log( s_r_m_u1 * s_r_p_u2 / (s_u1 * s_u2) );
+				
+				// \Delta in Ref.
+				double f_delta = SQR( f_b1x2x1b2 ) + 4.0/SQR(Nc) * f_b1x1x2b2 * f_b1b2x2x1 ;
+				double sqrt_fdelta = std::sqrt(f_delta);
+				//if (isnan(f_delta) or isnan(f_b1x1x2b2) or isnan(f_b1x2x1b2))
+				//	cout << "sqrtdelta nan: u1 " << u1 << " u2 " << u2 << " r " << r << " r-u1 " << r_m_u1 << " r+u2 " << r_p_u2 << " r-u1+u2 " << r_m_u1_p_u2 << endl;
+				quadrupole = s_u1 * s_u2 *
+					( ( (sqrt_fdelta + f_b1x2x1b2 )/2.0 - f_b1x1x2b2)/sqrt_fdelta
+						* std::exp(Nc/4.0 * sqrt_fdelta)
+					+((sqrt_fdelta - f_b1x2x1b2 )/2.0 + f_b1x1x2b2)/sqrt_fdelta
+						* std::exp(-Nc/4.0 * sqrt_fdelta) 
+					)
+					* std::exp( -Nc/4.0*f_b1x2x1b2 + 1.0/(2.0*Nc)*f_b1x1x2b2);
+				
+				if (isinf(quadrupole))
+					cerr << "Inf quadrupole, r " << r << " u1 " << u1 << " u2 " << u2 << endl;
+				if (isnan(quadrupole)) 
+				{ 
+					// DPS limit, this limit is shown analytically in notes
+					// u1,u2>>r: Q -> S(x-x')S(b-b') also in finite-nc 
+					if (s_u1==0 and s_u2==0 and s_r>0 )
+						quadrupole = s_r*s_r_m_u1_p_u2;
+					else   // All other nan limits vanish, right?
+						quadrupole = 0;	
+				}
+				s6 = s_r * quadrupole;
+			}
+			else
+			{
+				// Quadrupole, large Nc
+				double f1 = s_r_m_u1 * s_r_p_u2 / (s_r_m_u1_p_u2 * s_r);
+				double f2 = s_u1 * s_u2 / (s_r_m_u1_p_u2 * s_r);
+				double loglog=0;     
+				loglog = std::log(f1) / std::log(f2);
+				// If u1,u2>>r loglog->1
+				// (but this is a DPS contribution and removed later)
+				if (s_u1==0 and s_u2==0 and s_r>0 )
+					loglog=1;
+				// All other NaN limits vanish
+					
+				if (isnan(loglog) )
+					loglog=0;
+				if (isinf(loglog))
+					loglog=0;
+					
+				s6 = s_r*s_u1*s_u2 - s_r * loglog * (s_u1 * s_u2 - s_r * s_r_m_u1_p_u2); 		
+			}
+			
+			//result = s6*cos( -pt1_dot_r - pt2_dot_r - pt2_dot_u2 + pt2_dot_u1 ) + nc_suppress;
+			result = s6;
+			
+			// Remove non-Nc-supressed DPS contribution
+			//if (u1 > 1.0/cutoff and u2>1.0/cutoff)
+			if (!isnan(quadrupole) and !isinf(quadrupole))
+			{
+				result -= s_r*s_r*s_r_m_u1_p_u2 
+					* step(u1-1.0/IR_CUTOFF)* step(u2-1.0/IR_CUTOFF);	// \theta(u1-1/CUTOFF)\tehta(u2-1/CUTOFF)			
+			}
+			// Subtract this here in order to force the integrand to vanish in UV,
+			// contribution calculated/compensated analytically in xs.cpp
+			double subtract_coeff = 1.0;
+			if (finite_nc)
+				subtract_coeff = 1.0 - 1.0/SQR(Nc);
+			result -= subtract_coeff * s_r*s_u1*s_u2;
+			result*=std::cos(-pt1_dot_r - pt2_dot_r - pt2_dot_u2 + pt2_dot_u1);
+			
+			// add nc-suppressed contribution
+			result += nc_suppress;
+		
+		}
+		
+		
+		// Wave function product
+		// \phi^*(u2) \phi(u) summed over spins and polarization
+		// simple resul in massless z=0 case
+		//result *= 8.0*SQR(M_PI) * u1_dot_u2 / ( SQR(u1)*SQR(u2) );
+		// with masses and z!=0 a bit more complicated:
+		// 8pi^2 m^2 z^2 [ K_1(mzu) K_1(mzu') u.u'/(uu') [1+(1-z)^2]
+		//                + z^2 K_0(mzu)K_0(mzu') ]
+		// In order to optimize, factor 8*pi^2*m^2*z^2
+		// is outside the integral
+		// factor 1/k^+ is thrown away as it cancels eventually
+		double M_Q = par->xs->M_Q();
+		double bessel_u1[2]; double bessel_u2[2];
+		if (M_Q > 1e-4)
+		{
+			gsl_sf_bessel_Kn_array(0,1,par->z*M_Q*u1, bessel_u1);
+			gsl_sf_bessel_Kn_array(0,1,par->z*M_Q*u2, bessel_u2);
+			double wf =  (1.0+SQR(1.0-par->z))*u1_dot_u2 /(u1*u2)
+						* bessel_u1[1] // gsl_sf_bessel_K1(par->z*M_Q*u1)
+						* bessel_u2[1] //gsl_sf_bessel_K1(par->z*M_Q*u2)
+					  + SQR(par->z)* bessel_u1[0]//gsl_sf_bessel_K0(par->z*M_Q*u1)
+						* bessel_u2[0]; //gsl_sf_bessel_K0(par->z*M_Q*u2)  ;
+			
+			
+			result *= wf;
+			if (isnan(result)){
+				cout <<"nan, u1bessel: " << par->z*M_Q*u1 << " u2 " << par->z*M_Q*u2 << " u1 " 
+				<< u1 << " u2 " << u2 << " z " << par->z << " m " << M_Q 
+				<< " r " << r << " theta1 " << theta1 << " " << LINEINFO << endl;
+				//exit(1);
+			}
 		}
 		else
 		{
-			// Quadrupole, large Nc
-			double f1 = s_r_m_u1 * s_r_p_u2 / (s_r_m_u1_p_u2 * s_r);
-			double f2 = s_u1 * s_u2 / (s_r_m_u1_p_u2 * s_r);
-			double loglog=0;     
-			loglog = std::log(f1) / std::log(f2);
-			// If u1,u2>>r loglog->1
-			// (but this is a DPS contribution and removed later)
-			if (s_u1==0 and s_u2==0 and s_r>0 )
-				loglog=1;
-			// All other NaN limits vanish
-				
-			if (isnan(loglog) )
-				loglog=0;
-			if (isinf(loglog))
-				loglog=0;
-				
-			s6 = s_r*s_u1*s_u2 - s_r * loglog * (s_u1 * s_u2 - s_r * s_r_m_u1_p_u2); 		
+			double wf = u1_dot_u2 / (SQR(u1)*SQR(u2)) * (1.0+SQR(1.0-par->z));    // 8\pi^2 is outside the integral
+			result *= wf;
 		}
-		
-		//result = s6*cos( -pt1_dot_r - pt2_dot_r - pt2_dot_u2 + pt2_dot_u1 ) + nc_suppress;
-		result = s6;
-		
-		// Remove non-Nc-supressed DPS contribution
-		//if (u1 > 1.0/cutoff and u2>1.0/cutoff)
-		if (!isnan(quadrupole) and !isinf(quadrupole))
-		{
-			result -= s_r*s_r*s_r_m_u1_p_u2 
-				* step(u1-1.0/IR_CUTOFF)* step(u2-1.0/IR_CUTOFF);	// \theta(u1-1/CUTOFF)\tehta(u2-1/CUTOFF)			
-		}
-		// Subtract this here in order to force the integrand to vanish in UV,
-		// contribution calculated/compensated analytically in xs.cpp
-		double subtract_coeff = 1.0;
-		if (finite_nc)
-			subtract_coeff = 1.0 - 1.0/SQR(Nc);
-		result -= subtract_coeff * s_r*s_u1*s_u2;
-		result*=std::cos(-pt1_dot_r - pt2_dot_r - pt2_dot_u2 + pt2_dot_u1);
-		
-		// add nc-suppressed contribution
-		result += nc_suppress;
-    
-    }
-
-    /*
-    if (correction and !finite_nc)
-    {
-		double f1 = s_r_m_u1 * s_r_p_u2 / (s_r_m_u1_p_u2 * s_r);
-        double f2 = s_u1 * s_u2 / (s_r_m_u1_p_u2 * s_r);
-        double loglog=0;     
-        loglog = std::log(f1) / std::log(f2);
-        // If u1,u2>>r loglog->1
-        if (s_u1==0 and s_u2==0 and s_r>0 )
-            loglog=1;
-        // All other NaN limits vanish
-            
-        if (isnan(loglog) )
-            loglog=0;
-        if (isinf(loglog))
-        {
-           //cout << "inf at u1 " << u1 << " u2 " << u2 << " r " << r << " f1 " << f1 << " f2 " << f2 <<
-           // " s " << s_r*(s_u1 * s_u2 - s_r * s_r_m_u1_p_u2) << " dpfd " << s_r* s_r * s_r_m_u1_p_u2 << endl;
-            
-            loglog=0;
-        }
-            
-        double tmpresult =  s_r * loglog * (s_u1 * s_u2 - s_r * s_r_m_u1_p_u2); 
-            
-        // Remove DPS, in large-\Nc it is S(b-b')S(x-x')^2
-        if (u1 > 1.0/cutoff and u2>1.0/cutoff)
-            tmpresult += s_r * s_r * s_r_m_u1_p_u2;
-         
-        tmpresult *= cos( -pt1_dot_r - pt2_dot_r - pt2_dot_u2 + pt2_dot_u1 );
-        result -=tmpresult;
-    }*/
-
-    
-    
-    // Wave function product
-    // \phi^*(u2) \phi(u) summed over spins and polarization
-    // simple resul in massless z=0 case
-    //result *= 8.0*SQR(M_PI) * u1_dot_u2 / ( SQR(u1)*SQR(u2) );
-    // with masses and z!=0 a bit more complicated:
-    // 8pi^2 m^2 z^2 [ K_1(mzu) K_1(mzu') u.u'/(uu') [1+(1-z)^2]
-    //                + z^2 K_0(mzu)K_0(mzu') ]
-    // In order to optimize, factor 8*pi^2*m^2*z^2
-    // is outside the integral
-    // factor 1/k^+ is thrown away as it cancels eventually
-    double M_Q = par->xs->M_Q();
-    double bessel_u1[2]; double bessel_u2[2];
-    if (M_Q > 1e-4)
-    {
-        gsl_sf_bessel_Kn_array(0,1,par->z*M_Q*u1, bessel_u1);
-        gsl_sf_bessel_Kn_array(0,1,par->z*M_Q*u2, bessel_u2);
-        double wf =  (1.0+SQR(1.0-par->z))*u1_dot_u2 /(u1*u2)
-                    * bessel_u1[1] // gsl_sf_bessel_K1(par->z*M_Q*u1)
-                    * bessel_u2[1] //gsl_sf_bessel_K1(par->z*M_Q*u2)
-                  + SQR(par->z)* bessel_u1[0]//gsl_sf_bessel_K0(par->z*M_Q*u1)
-                    * bessel_u2[0]; //gsl_sf_bessel_K0(par->z*M_Q*u2)  ;
-        
-        
-        result *= wf;
-        if (isnan(result)){
-            cout <<"nan, u1bessel: " << par->z*M_Q*u1 << " u2 " << par->z*M_Q*u2 << " u1 " 
-            << u1 << " u2 " << u2 << " z " << par->z << " m " << M_Q 
-            << " r " << r << " theta1 " << theta1 << " " << LINEINFO << endl;
-            //exit(1);
-        }
-    }
-    else
-    {
-        double wf = u1_dot_u2 / (SQR(u1)*SQR(u2)) * (1.0+SQR(1.0-par->z));    // 8\pi^2 is outside the integral
-        result *= wf;
-    }
-
+	}
+	
+	//////////////////////////////// GLUON CHANNEL //////////////////////////////////////
+	
+	else if (par->gluon)
+	{
+		cerr << "Gluon moved to gluon.cpp" << endl;
+	}
 
 
     if (isnan(result)){
         cerr << "NAN! " << LINEINFO << "\n"; exit(1); }
 
     result *= u1*u2*r;   // d^2 u_1 d^2 u2 d^2 r = du_1 du_2 dr u_1 u_2 u_3 d\theta_i
-
-
        
     result *= u1*u2*r;  // multiply by e^(ln u1) e^(ln u2) e^(ln r) due to the
                         // change of variables (Jacobian)
-
-    //cout << vec[0] << " " << vec[1] << " " << vec[2] << " " << result << endl;
 
 
 

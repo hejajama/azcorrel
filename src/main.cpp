@@ -55,6 +55,7 @@ int main(int argc, char* argv[])
         cout << "-output_file filename" << endl;
         cout << "-points points" << endl;
         cout << "-finite_nc: use finite Nc when calculating quadrupole" << endl;
+        cout << "-gluon: compute gluon channel" << endl;
         return 0;
     }
 
@@ -97,7 +98,8 @@ int main(int argc, char* argv[])
     double mq=0.14;
     bool multiply_pdf=true;
     PDF *pdf=0;
-    unsigned long long mcintpoints=1e7;
+    bool gluon=false;
+    unsigned long long mcintpoints=1e8;
     
     bool deuteron=false;   
 
@@ -176,6 +178,8 @@ int main(int argc, char* argv[])
             output_file = argv[i+1];
         else if (string(argv[i])=="-finite_nc")
 			finite_nc=true;
+		else if (string(argv[i])=="-gluon")
+			gluon=true;
         else if (string(argv[i]).substr(0,1)=="-")
         {
             cerr << "Unrecoginzed parameter " << argv[i] << endl;
@@ -207,6 +211,7 @@ int main(int argc, char* argv[])
     CrossSection2 cross_section(&amplitude, pdf, fragmentation);
     cross_section.SetMCIntPoints(mcintpoints);
     cross_section.SetM_Q(mq);
+    cross_section.SetGluon(gluon);
     cross_section.SetFiniteNc(finite_nc);
     double ya=std::log(amplitude.X0() / cross_section.xa(pt1,pt2,y1,y2,sqrts));
     
@@ -272,18 +277,6 @@ int main(int argc, char* argv[])
        // return -1;
     }   
     
-    
-    ///DEBUG
-    /*
-	cross_section.LoadPtData(3,3);
-	cross_section.Prepare2DInterpolators(3.14159265);
-	for (double tmppt1=0.5; tmppt1<4.5; tmppt1 += 0.1)
-	{
-		double tmppt2=1.5;
-		cout << tmppt1 << " " << tmppt2 << " " << cross_section.ptinterpolator2d->Evaluate(tmppt1, tmppt2) << " " << cross_section.ptinterpolator2d->Evaluate(tmppt2, tmppt1) << endl;
-	}
-	return 0;*/
-    
     amplitude.InitializeInterpolation(ya);
     double normalization = 1;//cross_section.Sigma(pt1, pt2, y1, y2, sqrts);
     if (phi>-0.5) points=1;    // calculate only given angle
@@ -327,8 +320,8 @@ int main(int argc, char* argv[])
         
         if (mode==MODE_DSIGMA)
         {
-            result = cross_section.dSigma(pt1,pt2,y1,y2,theta,sqrts,multiply_pdf);
-            if (result < 0)	// convergence problem
+            result = cross_section.dSigma(pt1,pt2,y1,y2,theta,sqrts);
+            if (result < -999999)	// convergence problem
 				return -1;
         }
 
