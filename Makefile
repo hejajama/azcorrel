@@ -1,5 +1,5 @@
-CXXFLAGS = `gsl-config --cflags` -Wno-long-long -O3 -Wall -pedantic -I ../amplitudelib #-fopenmp 
-LDFLAGS = `gsl-config --libs` -lm -lfftw3 -lgfortran -lpthread #-L../amplitudelib/ -lamplitude 
+CXXFLAGS = `gsl-config --cflags` -Wno-long-long -O2 -Wall -pedantic -I ../amplitudelib #-fopenmp 
+LDFLAGS = `gsl-config --libs` -lm -lpthread -lgfortran #-L../amplitudelib/ -lamplitude 
 CFLAGS = -D_REENTRANT -std=c99
 FORTRANFLAGS = 
 
@@ -15,7 +15,7 @@ include filelist.m
 all: azcorrel 
 
 azcorrel: $(OBJECTS) $(COBJECTS) 
-	$(CXX) $(CXXFLAGS) $(LDFLAGS) $(OBJECTS) $(COBJECTS) ../amplitudelib/libamplitude.a -lgfortran -o azcorrel
+	$(CXX) $(CXXFLAGS) $(LDFLAGS) $(OBJECTS) $(COBJECTS) ../amplitudelib/libamplitude_mpi.a -o azcorrel
 .cpp.o:
 	 $(CXX) $(CXXFLAGS) $< -c -o $@
 .c.o:

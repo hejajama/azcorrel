@@ -46,7 +46,6 @@ int main(int argc, char* argv[])
         cout << "-phi phi: calculate only one angle" << endl;
         cout << "-minphi phi, -maxphi phi" << endl;
         cout << "-pdfmode [MRST, CTEQ]: choose pdf" << endl;
-        cout << "-pdf Q: plot PDF as a function of x" << endl;
         cout << "-nopdf: don't multiply by pdf, prints ~d\\sigma/d^3kd^3q" << endl;
         cout << "-amplitude filename: where to load amplitude data" << endl;
         cout << "-mcintpoints points" << endl;
@@ -55,7 +54,7 @@ int main(int argc, char* argv[])
         cout << "-output_file filename" << endl;
         cout << "-points points" << endl;
         cout << "-finite_nc: use finite Nc when calculating quadrupole" << endl;
-        cout << "-gluon: compute gluon channel" << endl;
+        cout << "-channel Q_QG [default], G_QQ, G_GG" << endl;
         return 0;
     }
 
@@ -63,6 +62,7 @@ int main(int argc, char* argv[])
     int points=10;
     double minphi=0.5, maxphi=M_PI;
     bool fftw=false;
+    Channel ch = Q_QG;
     
     bool finite_nc=false;
 
@@ -98,7 +98,6 @@ int main(int argc, char* argv[])
     double mq=0.14;
     bool multiply_pdf=true;
     PDF *pdf=0;
-    bool gluon=false;
     unsigned long long mcintpoints=1e8;
     
     bool deuteron=false;   
@@ -123,8 +122,6 @@ int main(int argc, char* argv[])
             maxphi = StrToReal(argv[i+1]);
         else if (string(argv[i])=="-amplitude" or string(argv[i])=="-data")
             amplitude_filename = argv[i+1];
-        else if (string(argv[i])=="-pdf")
-            Q=StrToReal(argv[i+1]);
         else if (string(argv[i])=="-nopdf")
             multiply_pdf=false;
         else if (string(argv[i])=="-mq")
@@ -178,8 +175,20 @@ int main(int argc, char* argv[])
             output_file = argv[i+1];
         else if (string(argv[i])=="-finite_nc")
 			finite_nc=true;
-		else if (string(argv[i])=="-gluon")
-			gluon=true;
+		else if (string(argv[i])=="-channel")
+		{
+			if (string(argv[i+1])=="Q_QG")
+				ch=Q_QG;
+			else if (string(argv[i+1])=="G_QQ")
+				ch=G_QQ;
+			else if (string(argv[i+1])=="G_GG")
+				ch=G_GG;
+			else
+			{
+				cerr << "Unknown channel " << argv[i+1] << endl;
+				return -1;
+			}
+		}
         else if (string(argv[i]).substr(0,1)=="-")
         {
             cerr << "Unrecoginzed parameter " << argv[i] << endl;
@@ -193,14 +202,6 @@ int main(int argc, char* argv[])
         pdf->Initialize();
     }
     
-   
-    if (Q>=0)   // Plot PDF and exit
-    {
-        pdf->PlotPdf(Q);
-        delete pdf;
-        return 0;
-    }
-    
 
     AmplitudeLib amplitude(amplitude_filename);
     DSS *fragmentation = NULL;
@@ -211,7 +212,7 @@ int main(int argc, char* argv[])
     CrossSection2 cross_section(&amplitude, pdf, fragmentation);
     cross_section.SetMCIntPoints(mcintpoints);
     cross_section.SetM_Q(mq);
-    cross_section.SetGluon(gluon);
+    cross_section.SetChannel(ch);
     cross_section.SetFiniteNc(finite_nc);
     double ya=std::log(amplitude.X0() / cross_section.xa(pt1,pt2,y1,y2,sqrts));
     
@@ -257,6 +258,7 @@ int main(int argc, char* argv[])
     infostr << "# MC Integration points " << mcintpoints << " / supported: "
         << std::numeric_limits<unsigned long long>::max() << endl;
     infostr << "# Max pt when loading data: " << cross_section.MaxPt() << endl;
+    infostr << "# Channel: "; if (ch==Q_QG) infostr << " Q->QG"; else if (ch==G_QQ) infostr << "G->QQ"; else if (ch==G_GG) infostr << "G->GG"; infostr << endl;
     
     if (cross_section.xh(pt1,pt2,y1,y2,sqrts)>1  and mode==MODE_DSIGMA)
     {

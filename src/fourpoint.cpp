@@ -24,7 +24,7 @@ using std::sin;
  * Calculate the additional term to two-body correlations
  * d\sigma / (dpt1 dpt2 dy1 dy2 d\theta)
  *
- * Heikki Mäntysaari <heikki.mantysaari@jyu.fi>, 2011-2012
+ * Heikki Mäntysaari <heikki.mantysaari@jyu.fi>, 2011-2013
  */
 
 
@@ -53,8 +53,7 @@ double CrossSection2::CorrectionTerm(double pt1, double pt2, double ya, double p
     if(id==0) 
     #endif
     cout << "# Starting MC integral, marquet: " << cyrille << ", correction: " << correction 
-        << " finite-Nc " << FiniteNc() << " ir-cutoff " << IR_CUTOFF << " GeV " <<
-        " gluon " << gluon << endl;
+        << " finite-Nc " << FiniteNc() << " ir-cutoff " << IR_CUTOFF << " GeV " << endl;
     
 
 
@@ -76,26 +75,26 @@ double CrossSection2::CorrectionTerm(double pt1, double pt2, double ya, double p
        
     //cout << "-----------" << endl;
     double res=0;
+    if (channel != Q_QG)
+    {
+		cerr << "Asked to compute correction term to q->qg but mode is " << channel << endl;
+		return 0;
+	}
+	
     // Constants taken out from integral in order to reduse number of
     // products in integrand
     double constants;
-    if (gluon==false)
-    {
-		if (M_Q()>1e-4)
-			constants = 8.0*SQR(M_PI)*SQR(z)*SQR(M_Q())/std::pow(2.0*M_PI, 6);
-		else
-			constants = 8.0*SQR(M_PI) / std::pow(2.0*M_PI, 6);
-	}
+	if (M_Q()>1e-4)
+		constants = 8.0*SQR(M_PI)*SQR(z)*SQR(M_Q())/std::pow(2.0*M_PI, 6);
 	else
-	{
-		constants=1.0/std::pow(2.0*M_PI, 6);
-	}
+		constants = 8.0*SQR(M_PI) / std::pow(2.0*M_PI, 6);
+	
+
 
         Inthelper_correction helper;
             helper.pt1=pt1; helper.pt2=pt2; helper.phi=phi; helper.ya=ya;
             helper.N=N; helper.z=z; helper.calln=0; helper.monte=3;
             helper.xs=this; helper.finite_nc=FiniteNc();
-            helper.gluon=gluon;
              
         #ifndef USE_MPI
             double (*integrand)(double*,size_t,void*) = Inthelperf_correction;
@@ -319,8 +318,6 @@ double Inthelperf_correction(double* vec, size_t dim, void* p)
 
     double result = 0;
 	////////////////////////////// QUARK CHANNEL ////////////////////
-	if (!par->gluon)
-	{
 
 	
 		if (cyrille)
@@ -475,15 +472,8 @@ double Inthelperf_correction(double* vec, size_t dim, void* p)
 			double wf = u1_dot_u2 / (SQR(u1)*SQR(u2)) * (1.0+SQR(1.0-par->z));    // 8\pi^2 is outside the integral
 			result *= wf;
 		}
-	}
 	
-	//////////////////////////////// GLUON CHANNEL //////////////////////////////////////
 	
-	else if (par->gluon)
-	{
-		cerr << "Gluon moved to gluon.cpp" << endl;
-	}
-
 
     if (isnan(result)){
         cerr << "NAN! " << LINEINFO << "\n"; exit(1); }

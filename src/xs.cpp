@@ -163,14 +163,17 @@ double CrossSection2::dSigma(double pt1, double pt2, double y1, double y2, doubl
 		if (id==0)
 		    cout << "# uncorrected result " << result << " nc-suppressed " << nc_suppress << endl;
 	#endif
-	if (!gluon)
+	if (channel==Q_QG)
 	    correction = CorrectionTerm(pt1,pt2,ya,phi,tmpz);
-	else
+	else if (channel==G_QQ)
 	{
-		result = UncorrectedGluon(pt1, pt2, y1, y2, phi, sqrts);
+		result = GluonQuarkQuark(pt1,pt2,y1,y2,phi,sqrts);
+	} 
+	else if (channel==G_GG)
+	{
+		result = GluonGluonGluon(pt1, pt2, y1, y2, phi, sqrts);
 		return result;
-		//correction = GluonCorrectionTerm(pt1,pt2,ya,phi,tmpz);
-		return correction;
+
 	}
     if (correction < -9999)
     {
@@ -198,7 +201,7 @@ double CrossSection2::dSigma(double pt1, double pt2, double y1, double y2, doubl
     // Nc-supprsesed terms analytically
 
     correction +=nc_suppress;  
-    if (gluon) cerr << "Shoudn't be here...\n";	///DEBUG
+    if (channel != Q_QG) cerr << "Shoudn't be here...\n";	///DEBUG
 	else result += correction;
 
     // return Marquet's k^+|foo|^2F() with correction term, not multiplied
@@ -372,6 +375,7 @@ struct dSigma_full_helper
     double phi;
     bool deuteron;
     double sqrts;
+    Channel channel;
 };
 
 double dSigma_full_helperf_z1(double z1, void* p);
@@ -399,6 +403,7 @@ double CrossSection2::dSigma_full(double pt1, double pt2, double y1, double y2,
     helper.pt_interpolator_rev = ptinterpolator2d_rev;
     helper.pt_interpolator_cor = ptinterpolator2d_correction;
     helper.pt_interpolator_rev_cor = ptinterpolator2d_rev_correction;
+    helper.channel=channel;
     helper.xs=this;
     helper.x1=x1; helper.x2=x2; helper.phi=phi;
     helper.y1=y1; helper.y2=y2; helper.sqrts=sqrts;
@@ -426,8 +431,14 @@ double CrossSection2::dSigma_full(double pt1, double pt2, double y1, double y2,
 	double alphas=Alpha_s(SQR(std::max(pt1, pt2))); 
 	//cout << "maxpt " << std::max(pt1,pt2) << " alphas " << alphas << endl;
 	//alphas=0.2;
-    result *=  Nc/2.0*alphas / (4.0*SQR(M_PI)); // NB! \int d^2b = S_T is dropped as it
+    result *= alphas / (4.0*SQR(M_PI)); // NB! \int d^2b = S_T is dropped as it
     // should cancel, wouldn't work anymore if we calculated something b-dependent!!!!
+    
+    if (channel==Q_QG)
+		result *= Nc/2.0;
+	if (channel==G_GG)
+		result *= 8.0 * Nc/2.0;
+    // Quark channel color factor is Cf*NC/(2Cf) = Nc/2
     // Nc/2 as we have Cf * Nc/(2Cf) = Nc/2 in large and finite-nc
     
 
@@ -463,6 +474,8 @@ double dSigma_full_helperf_z1(double z1, void* p)
 
 double dSigma_full_helperf_z2(double z2, void* p)
 {    
+	
+	
     dSigma_full_helper *par = (dSigma_full_helper*)p;
     
     if (par->x1/par->z1 + par->x2/z2 > 1)
@@ -473,6 +486,10 @@ double dSigma_full_helperf_z2(double z2, void* p)
 
     double result=0;
     double qscale = std::max(par->pt1, par->pt2);
+    bool deuteron = par->deuteron;
+    Channel channel = par->channel;
+    if (channel != Q_QG and deuteron)
+		cerr<< "Gluon channel does not support deuteron...." << endl;
 
     double xh = par->xs->xh(par->pt1/par->z1, par->pt2/z2, par->y1, par->y2, par->sqrts);
     /*double xa = par->xs->xa(par->pt1/par->z1, par->pt2/z2, par->y1, par->y2, par->sqrts);
@@ -481,19 +498,28 @@ double dSigma_full_helperf_z2(double z2, void* p)
 
     double xf_u = par->xs->Pdf()->xq(xh, qscale, U);
     double xf_d = par->xs->Pdf()->xq(xh, qscale, D);
+    double xf_g = par->xs->Pdf()->xq(xh, qscale, G);
 
     double frag_u_pi0_z1 = par->xs->FragFun()->Evaluate(U, PI0, par->z1, qscale);
     double frag_d_pi0_z1 = par->xs->FragFun()->Evaluate(D, PI0, par->z1, qscale);
+    double frag_s_pi0_z1 = par->xs->FragFun()->Evaluate(S, PI0, par->z1, qscale);
     double frag_g_pi0_z1 = par->xs->FragFun()->Evaluate(G, PI0, par->z1, qscale);
     double frag_u_pi0_z2 = par->xs->FragFun()->Evaluate(U, PI0, z2, qscale);
     double frag_d_pi0_z2 = par->xs->FragFun()->Evaluate(D, PI0, z2, qscale);
+    double frag_s_pi0_z2 = par->xs->FragFun()->Evaluate(S, PI0, z2, qscale);
     double frag_g_pi0_z2 = par->xs->FragFun()->Evaluate(G, PI0, z2, qscale);
 
     // Interpolators give parton level cross section which is not multiplied by (1-z)
     // Evaluate(gluon momentum, quark momentum)
+    double zfac =  1.0 - par->xs->Z(par->pt1/par->z1, par->pt2/z2, par->y1, par->y2);
+    // in g->qq channel this factor is z(1-z) instead of (1-z)
+    if (channel==G_QQ or channel==G_GG) zfac *= par->xs->Z(par->pt1/par->z1, par->pt2/z2, par->y1, par->y2);
+    
     result =
         (par->pt_interpolator->Evaluate(par->pt1/par->z1, par->pt2/z2)  )
-        * (1.0 - par->xs->Z(par->pt1/par->z1, par->pt2/z2, par->y1, par->y2));
+        * zfac;
+    
+		
       
 
     double xf_frag1 = 
@@ -504,7 +530,16 @@ double dSigma_full_helperf_z2(double z2, void* p)
             *  frag_d_pi0_z2
             *  frag_g_pi0_z1;
 
-    bool deuteron = par->deuteron;
+	// g->uu,dd,ss and quarks fragment, assume that u->pi0 and ubar->pi0 are same
+	if (channel==G_QQ)
+		xf_frag1 = xf_g *
+			( frag_u_pi0_z1 * frag_u_pi0_z2 + frag_d_pi0_z1 *frag_d_pi0_z2 
+				+ frag_s_pi0_z1 * frag_s_pi0_z2 );
+	else if (channel==G_GG)
+	{
+		xf_frag1 = xf_g * frag_g_pi0_z1 * frag_g_pi0_z2;
+	}
+    
     // u in proton = d in deuteron
     if (deuteron)
     {
@@ -528,6 +563,13 @@ double dSigma_full_helperf_z2(double z2, void* p)
           + xf_d
             *  frag_d_pi0_z1
             *  frag_g_pi0_z2;
+    if (channel==G_QQ)
+		xf_frag2 = xf_g *
+			( frag_u_pi0_z1 * frag_u_pi0_z2 + frag_d_pi0_z1 *frag_d_pi0_z2 
+				+ frag_s_pi0_z1 * frag_s_pi0_z2 );
+	else if (channel == G_GG)
+		xf_frag2=0;	// in g->gg channel both situations are already taken into account
+		
     if (deuteron)
     {
         xf_frag2 +=
@@ -538,9 +580,14 @@ double dSigma_full_helperf_z2(double z2, void* p)
             *  frag_d_pi0_z1
             *  frag_g_pi0_z2;
     }
+    
+    zfac = (1.0 - par->xs->Z(par->pt2/z2, par->pt1/par->z1, par->y2, par->y1));
+    if (channel==G_QQ) zfac *=   par->xs->Z(par->pt2/z2, par->pt1/par->z1, par->y2, par->y1);
+    
     result += (par->pt_interpolator_rev->Evaluate(par->pt2/z2, par->pt1/par->z1)  )
-        * (1.0 - par->xs->Z(par->pt2/z2, par->pt1/par->z1, par->y2, par->y1))   
+        *  zfac
         * xf_frag2;
+    
     
     return result/SQR(z2);
 }
@@ -796,7 +843,7 @@ double Inthelperf_cp_pt2(double pt2, void* p)
  * as in ref. 0708.0231 but w.o. vector k/|k|
  * Default value of z=0
  */
-struct G_helper { double y; AmplitudeLib* N; double kt; double z; CrossSection2 *xs; bool gluon; };
+struct G_helper { double y; AmplitudeLib* N; double kt; double z; CrossSection2 *xs; Channel channel; };
 double G_helperf(double r, void* p);
 double G_helperf_smallpt(double r, void* p);
 double CrossSection2::G(double kt, double x, double z)
@@ -805,7 +852,7 @@ double CrossSection2::G(double kt, double x, double z)
     
     G_helper helper;
     helper.y = std::log(N->X0()/x); 
-    helper.gluon=gluon;
+    helper.channel=channel;
     helper.N=N; helper.kt=kt; helper.z=z; helper.xs=this;
     
     if (kt < 1e-3)
@@ -845,7 +892,7 @@ double G_helperf(double r, void *p)
     G_helper* par = (G_helper*) p;
     double M_Q = par->xs->M_Q();
     // Massless case
-    if (M_Q<1e-5 or par->z<1e-5 or par->gluon)
+    if (M_Q<1e-5 or par->z<1e-5 or par->channel==G_QQ or par->channel==G_GG)
     {
         //cerr<<"Calculating massless case, are you sure? " << LINEINFO << endl;
         double result=0;
@@ -945,7 +992,8 @@ CrossSection2::CrossSection2(AmplitudeLib* N_, PDF* pdf_,FragmentationFunction* 
     ptinterpolator2d_correction = NULL;
     ptinterpolator2d_rev_correction = NULL;
 
-	double minpt=0.5, maxpt=7.5, ptstep=0.5;
+	///paperi maxpt 7.5
+	double minpt=0.5, maxpt=8, ptstep=0.5;
     for (double pt=minpt; pt<=maxpt; pt+=ptstep)
     {
         ptvals.push_back(pt);
@@ -958,15 +1006,11 @@ CrossSection2::CrossSection2(AmplitudeLib* N_, PDF* pdf_,FragmentationFunction* 
     
         
         
-     //std::string fileprefix = "rhic_pp/";
-    //string fileprefix = "rhic_central_025/";
-    //fileprefix = "phenix/mv1/largenc/";
-    //fileprefix = "marquet_qs015/";
-    //fileprefix = "final_result/ircutoff_lambdaqcd/aamqs_qs036/largenc/";
-    fileprefix = "final_result/ircutoff_lambdaqcd/mv1_qs072/largenc/";
-    //fileprefix = "final_result/ircutoff_lambdaqcd/mvgamma_qs033/largenc/";
-    //fileprefix="marquet_qs015/";
-    fileprefix_cor = "rhic_korjaus_central/";
+
+    //fileprefix = "final_result/ircutoff_lambdaqcd/mv1_qs072/largenc/";
+    fileprefix = "gluon/q_vs_g/lhc/ggg/";
+ 
+    fileprefix_cor = "NOT USED";
     
 	postfix = "";//"_largenc";
 	#ifdef USE_MPI
@@ -1135,8 +1179,9 @@ int CrossSection2::LoadPtData(double y1, double y2)
        std::vector<Interpolator*> tmpinterpolators_rev_cor;
        for (int pt2ind=0; pt2ind<points; pt2ind++)
        {
-		   double x = xh(ptvals[pt1ind], ptvals[pt2ind], y1, y2, 200);
-		   double x_rev = xh(ptvals[pt1ind], ptvals[pt2ind], y2, y1, 200);
+		   ///TODO: Hardcoded rhic kinematics
+		   double x = xh(ptvals[pt1ind], ptvals[pt2ind], y1, y2, 5020);
+		   double x_rev = xh(ptvals[pt1ind], ptvals[pt2ind], y2, y1, 5020);
             std::stringstream fname, fname_rev, fname_cor, fname_rev_cor;
             /*fname << fileprefix << "pt1_" << ptstrings[pt1ind] << "_pt2_"
                 << ptstrings[pt2ind] << "_y1_" << y1str << "_y2_" << y2str << postfix;
@@ -1224,7 +1269,7 @@ int CrossSection2::LoadPtData(double y1, double y2)
             }
             if (dphi_rev.size()<3)
             {
-				if (x_rev<1)
+				//if (x_rev<1)
 					cerr << "Not enough data points in " << fname_rev.str() << ": " << LINEINFO << " (x_h=" << x_rev << ", assuming=0): " << endl;
 				dphi_rev.clear(); xs_rev.clear();
 				dphi_rev.push_back(0.5);  dphi_rev.push_back(1); dphi_rev.push_back(1.5); dphi_rev.push_back(3.141592);
@@ -1232,7 +1277,7 @@ int CrossSection2::LoadPtData(double y1, double y2)
 			}
             if (dphi_rev[dphi_rev.size()-1]<3.1)
             {
-				if (x_rev<1)
+				//if (x_rev<1)
 					cerr << "Max dphi in file " << fname_rev.str() << " is " << dphi_rev[dphi_rev.size()-1] <<  " (x_h=" << x_rev << ", assuming=0): " << endl;
 				dphi_rev.clear(); 		dphi_rev.push_back(0.5);  dphi_rev.push_back(1); dphi_rev.push_back(1.5); dphi_rev.push_back(3.141592);
 				xs_rev.clear(); xs_rev.push_back(0);xs_rev.push_back(0);xs_rev.push_back(0);xs_rev.push_back(0);
@@ -1285,7 +1330,7 @@ int CrossSection2::LoadPtData(double y1, double y2)
     return 0;
 }
 
-void CrossSection2::SetGluon(bool g_)
+void CrossSection2::SetChannel(Channel c_)
 {
-	gluon=g_;
+	channel=c_;
 }

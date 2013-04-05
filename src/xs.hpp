@@ -14,6 +14,13 @@
 #include <fragmentation/fragmentation.hpp>
 #include <tools/interpolation2d.hpp>
 
+enum Channel
+{
+	Q_QG,		// q->qg
+	G_QQ,		// g->qq
+	G_GG		// g->gg
+};
+
 class CrossSection2
 {
     public:
@@ -29,8 +36,10 @@ class CrossSection2
         void CalculateCorrection_fft(double ya, double z);
         double Sigma(double pt1, double pt2, double y1, double y2, double sqrts);
         
-        double UncorrectedGluon(double pt1, double pt2, double y1, double y2, double theta, double sqrts);
+        double GluonGluonGluon(double pt1, double pt2, double y1, double y2, double theta, double sqrts);
         double GluonCorrectionTerm(double pt1, double pt2, double ya, double phi, double z);
+
+		double GluonQuarkQuark(double pt1, double pt2, double y1, double y2, double theta, double sqrts);
 
 
         double Z(double pt1, double pt2, double y1, double y2);
@@ -71,6 +80,8 @@ class CrossSection2
         
         bool FiniteNc();
         void SetFiniteNc(bool fnc);
+        
+        void SetChannel(Channel c_);
         
         Interpolator2D *ptinterpolator2d;
         Interpolator2D *ptinterpolator2d_rev;
@@ -116,7 +127,8 @@ class CrossSection2
 
         bool apply_corrections; 
         
-        bool gluon;
+        
+        Channel channel;
         
 };
 
