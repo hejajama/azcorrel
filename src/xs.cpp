@@ -902,7 +902,6 @@ double G_helperf(double r, void *p)
 
         return result;
     }
-
     // m,z>0
     double result=0;
     if (r< par->N->MinR()) result = r*gsl_sf_bessel_K1(r*M_Q*par->z);

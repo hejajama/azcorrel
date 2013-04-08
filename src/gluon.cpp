@@ -31,7 +31,8 @@ extern "C"
 const double IR_CUTOFF=LAMBDAQCD;
 void pVegas_gluon_wrapper(double x[6], double f[1], void* par);
 
-const double GGG_MAXR = 80;
+const double GGG_MAXR = 100; const double GGG_MINR = 0.00001;
+const double MINLNR = std::log(GGG_MINR); const double MAXLNR = std::log(GGG_MAXR);
 
 double CrossSection2::GluonCorrectionTerm(double pt1, double pt2, double ya, double phi,
         double z)
@@ -60,7 +61,7 @@ double CrossSection2::GluonCorrectionTerm(double pt1, double pt2, double ya, dou
     // pt1=k, pt2=q
 
     N->SetOutOfRangeErrors(false);
-    double minr=std::log(0.0001); double maxr=std::log(GGG_MAXR);
+    double minr=std::log(GGG_MINR); double maxr=std::log(GGG_MAXR);
     //double minr=0; double maxr=100;
 
        
@@ -165,9 +166,6 @@ double CrossSection2::GluonCorrectionTerm(double pt1, double pt2, double ya, dou
 	//else if (std::abs(std_dev[0]/estim[0])<0.01) // Can reduce number of mcintpoints
 		//mcintpoints /= 2.0;
     
-
-    
-    
     res = estim[0]*constants;
     #endif
     return res;
@@ -265,8 +263,9 @@ double Inthelperf_gluon_correction(double* vec, size_t dim, void* p)
 					* step(u1-1.0/IR_CUTOFF)* step(u2-1.0/IR_CUTOFF);	// \theta(u1-1/CUTOFF)\tehta(u2-1/CUTOFF)
 		
 		result *= std::cos(-pt1_dot_r  - pt2_dot_r + pt2_dot_u1 - pt2_dot_u2);
-		/*
+		
 		///// DEBUG: FULL result, not just "correction"
+		/*
 		result += - s_r*s_r_m_u2 * s_u2 * std::cos( -pt1_dot_r - pt2_dot_r + pt1_dot_u2 - (1.0-z)*pt1_dot_u1 + z*pt2_dot_u1 )
 			- s_r*s_r_p_u1 * s_u1 * std::cos( -pt1_dot_r - pt2_dot_r - pt1_dot_u1 + (1.0-z)*pt1_dot_u2 - z*pt2_dot_u2 )
 			+ s_r*s_r * std::cos( -pt1_dot_r - pt2_dot_r + (1.0-z)*pt1_dot_u2 - z*pt2_dot_u2 - (1.0-z)*pt1_dot_u1 + z*pt2_dot_u1 );
@@ -325,6 +324,12 @@ double CrossSection2::GluonGluonGluon(double pt1, double pt2, double y1, double 
     if (ya<0)
         cerr << "Negative rapidity interval at " << LINEINFO << endl;
     
+    double wf_z = 4.0*SQR(2.0*M_PI)* ( tmpz/(1.0-tmpz) + (1.0-tmpz)/tmpz + tmpz*(1.0-tmpz) );
+    #ifdef USE_MPI
+    if (id==0)
+    #endif
+    cout <<"# wf_z: " << wf_z << endl;
+    
     if (!N->InterpolatorInitialized(ya))
         N->InitializeInterpolation(ya);
     double delta = Delta(pt1,pt2,phi);
@@ -337,13 +342,14 @@ double CrossSection2::GluonGluonGluon(double pt1, double pt2, double y1, double 
     double g=0,f2=0;
     
     ////DEBUG
+    //return GluonCorrectionTerm(pt1, pt2, ya, phi, tmpz);
     //return tmpz*(1.0-tmpz)*Nc/2.0*GluonCorrectionTerm(pt1, pt2, ya, phi, tmpz);
  
     f2=N->S_k(delta, ya, false, 2.0)/SQR(2.0*M_PI);	// 2d ft of S(r)^2 (adjoint rep=false) / (2pi)^2
     //g = G(delta, tmpxa);	// \int dr S(r) J_1(k*r) = 1/2pi \int d^2 r e^(iq.r)S(r)
     g = G(pt2, tmpxa);
     
-    double wf_z = 4.0*SQR(2.0*M_PI)* ( tmpz/(1.0-tmpz) + (1.0-tmpz)/tmpz + tmpz*(1.0-tmpz) );
+    
     
     double result = g * g * f2  * 1.0/(SQR(2.0*M_PI) );		// / (2pi)^2 as we have (2pi)^2 in wf_z
     if (id==0) cout << "# kappa: " << kappa << " f2 " << f2 << " g " << g << endl;
@@ -385,7 +391,7 @@ double CrossSection2::GluonGluonGluon(double pt1, double pt2, double y1, double 
     double reg[2*dim];
     int functions = 2;
     N->SetOutOfRangeErrors(false);
-    double minr=std::log(0.0001); double maxr=std::log(GGG_MAXR);
+    double minr=std::log(GGG_MINR); double maxr=std::log(GGG_MAXR);
     reg[0]=minr; reg[1]=minr;
     reg[dim]=maxr; reg[dim+1]=maxr; 
     reg[2]=0; reg[3]=0; 
@@ -410,7 +416,7 @@ double CrossSection2::GluonGluonGluon(double pt1, double pt2, double y1, double 
     // set up the grid (init = 0) with 5 iterations of 1000 samples,
     // no need to compute additional accumulators (fcns = 1),
     vegas(reg, dim, pVegas_gluon_uncorrected_wrapper,
-        0, mcintpoints/100, 5,  0,
+        0, mcintpoints/100/2, 5,  0,
         functions, 0, workers,
         estim, std_dev, chi2a, &par);
 
@@ -420,7 +426,7 @@ double CrossSection2::GluonGluonGluon(double pt1, double pt2, double y1, double 
     if (id==0)
         cout << "# 2nd round at " << std::ctime(&t);  
     vegas(reg, dim, pVegas_gluon_uncorrected_wrapper,
-            1, mcintpoints/10, 5, NPRN_RESULT,
+            1, mcintpoints/10/2, 5, NPRN_RESULT,
             functions, 0, workers,
             estim, std_dev, chi2a, &par);
       // final sample, inheriting previous results (init = 2)
@@ -428,7 +434,7 @@ double CrossSection2::GluonGluonGluon(double pt1, double pt2, double y1, double 
     if (id==0)
         cout << "# 3rd round at " << std::ctime(&t) ;  
     vegas(reg, dim,pVegas_gluon_uncorrected_wrapper,
-            2, mcintpoints, 2,   NPRN_RESULT,
+            2, mcintpoints/2, 2,   NPRN_RESULT,
             functions, 0,  workers,
             estim, std_dev, chi2a, &par);
 
