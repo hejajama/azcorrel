@@ -235,6 +235,7 @@ int main(int argc, char* argv[])
         output.open(output_file.c_str());
 
     std::stringstream infostr;
+    infostr <<"# Using AmplitudeLib v. " << amplitude.Version() << endl;
 
     if (multiply_pdf)
     {
@@ -254,7 +255,7 @@ int main(int argc, char* argv[])
         << " xa=" << cross_section.xa(pt1,pt2,y1,y2,sqrts)
         << " xh=" << cross_section.xh(pt1,pt2,y1,y2,sqrts)  
         << " x_0=" << amplitude.X0() << endl;
-    infostr << "# Q_s = " << 1.0/amplitude.SaturationScale(ya, 0.22) << " GeV " << endl;
+    infostr << "# Q_s = " << 1.0/amplitude.SaturationScale(amplitude.X0()*std::exp(-ya), 0.22) << " GeV " << endl;
     infostr << "# MC Integration points " << mcintpoints << " / supported: "
         << std::numeric_limits<unsigned long long>::max() << endl;
     infostr << "# Max pt when loading data: " << cross_section.MaxPt() << endl;
@@ -279,7 +280,7 @@ int main(int argc, char* argv[])
        // return -1;
     }   
     
-    amplitude.InitializeInterpolation(ya);
+    amplitude.InitializeInterpolation(amplitude.X0()*std::exp(-ya));
     double normalization = 1;//cross_section.Sigma(pt1, pt2, y1, y2, sqrts);
     if (phi>-0.5) points=1;    // calculate only given angle
 

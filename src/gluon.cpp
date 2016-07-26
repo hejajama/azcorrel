@@ -13,19 +13,22 @@
 #include <gsl/gsl_sf_bessel.h>
 #include <cmath>
 #include <ctime>
+#include <tools/tools.hpp>
+#include <tools/config.hpp>
 #include "config.hpp"
 #ifdef USE_MPI
     #include <mpi.h>
-
+#endif
 extern "C"
 {
     #include "pvegas/vegas.h"
 }
-#endif
 extern "C"
 {
     #include <fourier/fourier.h>
 }
+
+	using namespace Amplitude;
 
 
 const double IR_CUTOFF=LAMBDAQCD;
@@ -95,8 +98,9 @@ double CrossSection2::GluonCorrectionTerm(double pt1, double pt2, double ya, dou
     double std_dev[1]; // standard deviations              
     double chi2a[1];   // chi^2/n       
     int workers = 1;
-    
+    #ifdef USE_MPI 
     MPI_Comm_size(MPI_COMM_WORLD, &workers);
+	#endif
     workers--;
     if (workers==0)
     {
@@ -312,8 +316,8 @@ const int GLUONINTPOINTS = 4;
 
 double CrossSection2::GluonGluonGluon(double pt1, double pt2, double y1, double y2, double phi, double sqrts)
 {
-	#ifdef USE_MPI
 	int id;
+	#ifdef USE_MPI
 	MPI_Comm_rank(MPI_COMM_WORLD, &id);
 	#endif
 
@@ -345,7 +349,7 @@ double CrossSection2::GluonGluonGluon(double pt1, double pt2, double y1, double 
     //return GluonCorrectionTerm(pt1, pt2, ya, phi, tmpz);
     //return tmpz*(1.0-tmpz)*Nc/2.0*GluonCorrectionTerm(pt1, pt2, ya, phi, tmpz);
  
-    f2=N->S_k(delta, ya, false, 2.0)/SQR(2.0*M_PI);	// 2d ft of S(r)^2 (adjoint rep=false) / (2pi)^2
+    f2=N->S_k(delta, 0.01*std::exp(-ya), Amplitude::ADJOINT, 2.0)/SQR(2.0*M_PI);	// 2d ft of S(r)^2 (adjoint rep=false) / (2pi)^2
     //g = G(delta, tmpxa);	// \int dr S(r) J_1(k*r) = 1/2pi \int d^2 r e^(iq.r)S(r)
     g = G(pt2, tmpxa);
     
@@ -401,8 +405,10 @@ double CrossSection2::GluonGluonGluon(double pt1, double pt2, double y1, double 
     double std_dev[2]; // standard deviations              
     double chi2a[2];   // chi^2/n       
     int workers = 1;
-    
+   
+    #ifdef USE_MPI 
     MPI_Comm_size(MPI_COMM_WORLD, &workers);
+	#endif
     workers--;
     if (workers==0)
     {

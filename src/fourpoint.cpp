@@ -19,7 +19,7 @@ extern "C"
 
 using std::cos;
 using std::sin;
-
+using namespace Amplitude;
 /*
  * Calculate the additional term to two-body correlations
  * d\sigma / (dpt1 dpt2 dy1 dy2 d\theta)

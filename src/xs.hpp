@@ -88,6 +88,7 @@ class CrossSection2
         
         void SetGluon(bool gluon_);
 
+		double Alpha_s(double Qsqr, double scaling=1.0);
     private:
         double m_q; // Quark mass
         AmplitudeLib* N;

@@ -17,11 +17,14 @@
 #include <string>
 #include <sstream>
 #include <algorithm>
+#include <tools/tools.hpp>
 
 #ifdef USE_MPI
     #include <mpi.h>
 #endif
 
+
+using namespace Amplitude;
 
 extern "C"
 {
@@ -95,13 +98,14 @@ double CrossSection2::dSigma(double pt1, double pt2, double y1, double y2, doubl
     if (ya<0)
         cerr << "Negative rapidity interval at " << LINEINFO << endl;
     
-    if (!N->InterpolatorInitialized(ya))
-        N->InitializeInterpolation(ya);
+	double xbj = N->X0()*std::exp(-ya);
+    if (!N->InterpolatorInitialized(xbj));
+        N->InitializeInterpolation(xbj);
     double delta = Delta(pt1,pt2,phi);
 
     double g=0,f=0,h=0;
  
-    f=N->S_k(delta, ya)/SQR(2.0*M_PI);
+    f=N->S_k(delta, xbj)/SQR(2.0*M_PI);
 
     if (f<0)
     {
@@ -898,7 +902,7 @@ double G_helperf(double r, void *p)
         double result=0;
         if (r< par->N->MinR()) result = 1.0;
         else if (r > par->N->MaxR()) result=0;
-        else result = 1.0 - par->N->N(r, par->y);
+        else result = 1.0 - par->N->N(r, par->N->X0()*std::exp(-par->y));
 
         return result;
     }
@@ -906,7 +910,7 @@ double G_helperf(double r, void *p)
     double result=0;
     if (r< par->N->MinR()) result = r*gsl_sf_bessel_K1(r*M_Q*par->z);
     else if (r>par->N->MaxR()) result=0;
-    else result = r*gsl_sf_bessel_K1(r*M_Q*par->z)*par->N->S(r, par->y);
+    else result = r*gsl_sf_bessel_K1(r*M_Q*par->z)*par->N->S(r, par->N->X0()*std::exp(-par->y));
 
     return M_Q*par->z*result;
 }
@@ -959,7 +963,7 @@ double H_helperf(double r, void *p)
     double result=0;
     if (r< par->N->MinR()) result = r*gsl_sf_bessel_K0(r*M_Q*par->z);
     else if (r>par->N->MaxR()) result=0;
-    else result = r*gsl_sf_bessel_K0(r*M_Q*par->z)*par->N->S(r, par->y);
+    else result = r*gsl_sf_bessel_K0(r*M_Q*par->z)*par->N->S(r, par->N->X0()*std::exp(-par->y));
 
     return result;
 }
@@ -1332,4 +1336,17 @@ int CrossSection2::LoadPtData(double y1, double y2)
 void CrossSection2::SetChannel(Channel c_)
 {
 	channel=c_;
+}
+
+
+double CrossSection2::Alpha_s(double Qsqr, double scaling)
+{
+		double  LAMBDAQCD2= 0.241*0.241;
+		double MAXALPHA = 0.7;
+		    if (scaling*Qsqr < LAMBDAQCD2)
+					    return MAXALPHA;
+	    double alpha = 12.0*M_PI/( (33.0-2.0*Nf)*log(scaling*Qsqr/LAMBDAQCD2) );
+        if (alpha > MAXALPHA)
+				        return MAXALPHA;
+    return alpha;
 }
