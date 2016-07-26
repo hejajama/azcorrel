@@ -10,15 +10,14 @@
 #include "config.hpp"
 #ifdef USE_MPI
     #include <mpi.h>
-
+#endif
+#include <cstdlib>
 extern "C"
 {
-    #include "pvegas/vegas.h"
+#include "pvegas/vegas.h"
 }
-#endif
 
-using std::cos;
-using std::sin;
+using namespace std;
 using namespace Amplitude;
 /*
  * Calculate the additional term to two-body correlations
@@ -56,9 +55,9 @@ double CrossSection2::CorrectionTerm(double pt1, double pt2, double ya, double p
         << " finite-Nc " << FiniteNc() << " ir-cutoff " << IR_CUTOFF << " GeV " << endl;
     
 
-
-    if (!N->InterpolatorInitialized(ya))
-        cerr << "Interpolator is not initialized for y=" << ya << "!!!" << endl;
+    double xa = N->X0()*std::exp(-ya);
+    if (!N->InterpolatorInitialized(xa))
+        cerr << "Interpolator is not initialized for x=" << xa << "!!!" << endl;
     
     /*
      * We need to integrate over u,u',r and their corresponding angles
@@ -283,6 +282,7 @@ double Inthelperf_correction(double* vec, size_t dim, void* p)
     double pt2 = par->pt2;
     double phi = par->phi;
     double y = par->ya;
+    double xa = N->X0()*std::exp(-y);
     double z = par->z;
 
     // Dot products
@@ -299,22 +299,22 @@ double Inthelperf_correction(double* vec, size_t dim, void* p)
     double u1_dot_u2  = u1*u2*cos(theta2-theta1);
 
     // Amplitudes
-    double s_u1=N->S(u1, y);
-    double s_u2=N->S(u2,y);
-    double s_r=N->S(r,y);
+    double s_u1=N->S(u1, xa);
+    double s_u2=N->S(u2,xa);
+    double s_r=N->S(r,xa);
     
 
 	double r_m_u1=0, s_r_m_u1=0, r_p_u2=0, s_r_p_u2=0, r_m_u1_p_u2=0, s_r_m_u1_p_u2=0;   
     // r - u1
     r_m_u1 = std::sqrt(SQR(r) + SQR(u1) - 2.0*u1_dot_r);
-    s_r_m_u1 = N->S(r_m_u1, y);
+    s_r_m_u1 = N->S(r_m_u1, xa);
     // r + u'
     r_p_u2 = std::sqrt(SQR(r) + SQR(u2) + 2.0*u2_dot_r);
-    s_r_p_u2 = N->S(r_p_u2, y);
+    s_r_p_u2 = N->S(r_p_u2, xa);
     // r - u + u' = r + (u'-u)
     r_m_u1_p_u2 = std::sqrt( SQR(r) + (SQR(u1) + SQR(u2) - 2.0*u1_dot_u2)
                     + 2.0*(u2_dot_r - u1_dot_r) );
-	s_r_m_u1_p_u2 = N->S(r_m_u1_p_u2, y);
+	s_r_m_u1_p_u2 = N->S(r_m_u1_p_u2, xa);
 
     double result = 0;
 	////////////////////////////// QUARK CHANNEL ////////////////////

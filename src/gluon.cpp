@@ -28,8 +28,8 @@ extern "C"
     #include <fourier/fourier.h>
 }
 
-	using namespace Amplitude;
-
+using namespace Amplitude;
+using namespace std;
 
 const double IR_CUTOFF=LAMBDAQCD;
 void pVegas_gluon_wrapper(double x[6], double f[1], void* par);

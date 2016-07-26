@@ -23,6 +23,7 @@
     #include <mpi.h>
 #endif
 
+using namespace std;
 
 using namespace Amplitude;
 
@@ -1183,8 +1184,8 @@ int CrossSection2::LoadPtData(double y1, double y2)
        for (int pt2ind=0; pt2ind<points; pt2ind++)
        {
 		   ///TODO: Hardcoded rhic kinematics
-		   double x = xh(ptvals[pt1ind], ptvals[pt2ind], y1, y2, 5020);
-		   double x_rev = xh(ptvals[pt1ind], ptvals[pt2ind], y2, y1, 5020);
+		   double x = xh(ptvals[pt1ind], ptvals[pt2ind], y1, y2, 200);
+		   double x_rev = xh(ptvals[pt1ind], ptvals[pt2ind], y2, y1, 200);
             std::stringstream fname, fname_rev, fname_cor, fname_rev_cor;
             /*fname << fileprefix << "pt1_" << ptstrings[pt1ind] << "_pt2_"
                 << ptstrings[pt2ind] << "_y1_" << y1str << "_y2_" << y2str << postfix;
