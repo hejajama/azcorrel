@@ -16,6 +16,7 @@
 #include <fstream>
 #include <string>
 #include <sstream>
+#include <iomanip>
 #include <algorithm>
 #include <tools/tools.hpp>
 
@@ -980,6 +981,17 @@ double CrossSection2::WavefSqr_k(double k1, double k2, double k1_dot_k2, double 
 		/ ( (SQR(k1)+SQR(M_Q()*zfrac))*(SQR(k2)+SQR(M_Q()*zfrac)) );
 }
 
+std::string toStrMaxDecimals(double value, int decimals)
+{
+    std::ostringstream ss;
+    ss << std::fixed << std::setprecision(decimals) << value;
+    std::string s = ss.str();
+    if(decimals > 0 && s[s.find_last_not_of('0')] == '.') {
+        s.erase(s.size() - decimals + 1);
+    }
+    return s;
+}
+
 CrossSection2::CrossSection2(AmplitudeLib* N_, PDF* pdf_,FragmentationFunction* frag)
 {
     N=N_; pdf=pdf_; fragfun=frag;
@@ -1002,7 +1014,8 @@ CrossSection2::CrossSection2(AmplitudeLib* N_, PDF* pdf_,FragmentationFunction* 
     {
         ptvals.push_back(pt);
         std::stringstream s; s << pt;
-        ptstrings.push_back(s.str());
+      //  ptstrings.push_back(s.str());
+	    ptstrings.push_back(toStrMaxDecimals(pt, 1));
     }
 
     apply_corrections = false;
@@ -1012,7 +1025,7 @@ CrossSection2::CrossSection2(AmplitudeLib* N_, PDF* pdf_,FragmentationFunction* 
         
 
     //fileprefix = "final_result/ircutoff_lambdaqcd/mv1_qs072/largenc/";
-    fileprefix = "gluon/q_vs_g/lhc/ggg/";
+    fileprefix = "rhic_new_predictions/partonlevel/au/b_20/";
  
     fileprefix_cor = "NOT USED";
     
