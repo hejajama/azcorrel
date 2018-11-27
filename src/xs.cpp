@@ -627,11 +627,14 @@ double CrossSection2::dSigma_integrated(double minpt1, double minpt2, double min
     std::vector<double> yvals;
     if (STAR)
     {
-		yvals.push_back(2.4);
+		//yvals.push_back(2.4);
+		//yvals.push_back(2.8);
+		//yvals.push_back(3.2);
+		//yvals.push_back(3.6);
+		//yvals.push_back(4);
 		yvals.push_back(2.8);
-		yvals.push_back(3.2);
-		yvals.push_back(3.6);
-		yvals.push_back(4);
+		yvals.push_back(3.4);
+		yvals.push_back(4.0);
 	}
 	else
 	{
@@ -675,7 +678,7 @@ double CrossSection2::dSigma_integrated(double minpt1, double minpt2, double min
             double minpt=0, maxpt=0;
             if (STAR)
             {
-				minpt=2; maxpt=4;
+				minpt=1.5; maxpt=2.0;
 			} else {
 				minpt=1.6; maxpt=2;
 			}
@@ -812,7 +815,7 @@ double Inthelperf_cp_pt1(double pt1, void* p)
     double minpt=0, maxpt=0;
     if (STAR)
     {
-		minpt=1; maxpt=pt1;
+		minpt=0.5; maxpt=1.0;
 	} else{
 		minpt=0.5; maxpt=0.75;
 	}
@@ -1009,7 +1012,7 @@ CrossSection2::CrossSection2(AmplitudeLib* N_, PDF* pdf_,FragmentationFunction* 
     ptinterpolator2d_rev_correction = NULL;
 
 	///paperi maxpt 7.5
-	double minpt=0.5, maxpt=8, ptstep=0.5;
+	double minpt=0.5, maxpt=7.5, ptstep=0.5;
     for (double pt=minpt; pt<=maxpt; pt+=ptstep)
     {
         ptvals.push_back(pt);
@@ -1024,8 +1027,8 @@ CrossSection2::CrossSection2(AmplitudeLib* N_, PDF* pdf_,FragmentationFunction* 
         
         
 
-    //fileprefix = "final_result/ircutoff_lambdaqcd/mv1_qs072/largenc/";
-    fileprefix = "rhic_new_predictions/partonlevel/au/b_20/";
+    //fileprefix = "final_result/ircutoff_lambdaqcd/mv1_qs06/largenc/";
+    fileprefix = "rhic_new_predictions/partonlevel/au/b_0/";
  
     fileprefix_cor = "NOT USED";
     
@@ -1226,7 +1229,7 @@ int CrossSection2::LoadPtData(double y1, double y2)
 
             if (!file.is_open()  )
             {
-				if (x<1)
+				if (x<0.8)
 					cerr << "Can't open " << fname.str()  << " " << LINEINFO << ", assuming=0" << " (x_h=" << x <<")" << endl;
                 dphi.push_back(0.5); dphi.push_back(1.4); dphi.push_back(2.5); dphi.push_back(3.141592);
                 xs.push_back(0); xs.push_back(0); xs.push_back(0);xs.push_back(0);
@@ -1247,7 +1250,7 @@ int CrossSection2::LoadPtData(double y1, double y2)
             }
             if (dphi.size()<3)
             {
-				if (x<1)
+				if (x<0.8)
 					cerr << "No enough data points in " << fname.str() << " (x_h=" << x << ", assuming=0): " << LINEINFO << endl;
 				dphi.clear(); xs.clear();
 				dphi.push_back(0.5); dphi.push_back(1.4); dphi.push_back(2.5); dphi.push_back(3.141592);
@@ -1255,7 +1258,7 @@ int CrossSection2::LoadPtData(double y1, double y2)
 			}
             if (dphi[dphi.size()-1]<3.1)
             {
-				if (x<1)
+				if (x_rev < 0.8)
 					cerr << "Max dphi in file " << fname.str() << " is " << dphi[dphi.size()-1] << " at " << LINEINFO  << " (x_h=" << x << ", assuming=0)" << endl;
 				dphi.clear(); dphi.push_back(0.5); dphi.push_back(1); dphi.push_back(1.5); dphi.push_back(3.141592);
 				xs.clear(); xs.push_back(0);xs.push_back(0);xs.push_back(0);xs.push_back(0);
@@ -1265,7 +1268,7 @@ int CrossSection2::LoadPtData(double y1, double y2)
             
             if (!file_rev.is_open()  )
             {
-				if (x_rev<1)
+				if (x_rev<0.8)
 					cerr << "Can't open " << fname_rev.str()  << " " << LINEINFO << ", assuming=0" << " (x_h=" << x_rev << "): " << endl;
                 dphi_rev.push_back(0.5); dphi_rev.push_back(1.4); dphi_rev.push_back(2.5); dphi_rev.push_back(3.141592);
                 xs_rev.push_back(0); xs_rev.push_back(0); xs_rev.push_back(0);xs_rev.push_back(0);

@@ -199,6 +199,7 @@ int main(int argc, char* argv[])
     if (!pdf and mode != MODE_DSIGMA)   // Not initializd, use default
     {
         pdf = new CTEQ();
+		pdf->SetOrder(Amplitude::LO);
         pdf->Initialize();
     }
     
@@ -207,8 +208,10 @@ int main(int argc, char* argv[])
     DSS *fragmentation = NULL;
     
     if (mode != MODE_DSIGMA)
+	{
 		fragmentation = new DSS();
-
+    	fragmentation -> SetOrder(Amplitude::LO);
+	}
     CrossSection2 cross_section(&amplitude, pdf, fragmentation);
     cross_section.SetMCIntPoints(mcintpoints);
     cross_section.SetM_Q(mq);
